@@ -85,6 +85,25 @@ services:
       redis:
         condition: service_healthy
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: npm run dev -- --host 0.0.0.0
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      # Browser-facing backend address -- the browser makes the actual API
+      # calls, not this container, so it must never be the Docker-internal
+      # `django` hostname.
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+    depends_on:
+      - django
+
 volumes:
   postgres_data:
   redis_data:
