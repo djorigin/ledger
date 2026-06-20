@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     # local apps
     "apps.users",
     "apps.entities",
+    "apps.ledger",
 ]
 
 MIDDLEWARE = [
