@@ -3,6 +3,7 @@ Base settings shared by all environments. Environment-specific overrides
 live in local.py (dev) and prod.py (deploy) — both import * from here.
 """
 
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -24,11 +25,14 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     # local apps
     "apps.users",
     "apps.entities",
     "apps.ledger",
     "apps.currencies",
+    "apps.api",
 ]
 
 MIDDLEWARE = [
@@ -107,4 +111,35 @@ CELERY_BEAT_SCHEDULE = {
         # depending on DST). 16:30 UTC gives a safe buffer past either case.
         "schedule": crontab(hour=16, minute=30),
     },
+}
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
+    # Default-deny: every endpoint requires authentication, with per-viewset
+    # HasEntityRole layered on top for entity-scoped role checks.
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ],
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 50,
+    "DATETIME_FORMAT": "iso-8601",
+    "DATE_FORMAT": "iso-8601",
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
 }
