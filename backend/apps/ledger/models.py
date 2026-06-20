@@ -147,6 +147,7 @@ class JournalLine(models.Model):
     credit_amount = models.DecimalField(max_digits=19, decimal_places=4, default=Decimal("0"))
     currency = models.CharField(max_length=3, validators=[validate_currency_code])
     description = models.CharField(max_length=500, blank=True)
+    cleared = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -174,3 +175,24 @@ class JournalLine(models.Model):
             raise ValidationError(
                 _("Exactly one of debit_amount or credit_amount must be greater than zero.")
             )
+
+
+class ReconciliationRecord(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    account = models.ForeignKey(
+        Account, on_delete=models.PROTECT, related_name="reconciliation_records"
+    )
+    statement_date = models.DateField()
+    statement_balance = models.DecimalField(max_digits=19, decimal_places=4)
+    reconciled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+    reconciled_at = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-statement_date"]
+        indexes = [models.Index(fields=["account", "-statement_date"])]
+
+    def __str__(self):
+        return f"{self.account} reconciled to {self.statement_balance} as of {self.statement_date}"

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.ledger.models import Account, JournalEntry, JournalLine
+from apps.ledger.models import Account, JournalEntry, JournalLine, ReconciliationRecord
 
 
 class AccountInline(admin.TabularInline):
@@ -23,7 +23,7 @@ class AccountAdmin(admin.ModelAdmin):
 class JournalLineInline(admin.TabularInline):
     model = JournalLine
     extra = 0
-    fields = ["account", "debit_amount", "credit_amount", "currency", "description"]
+    fields = ["account", "debit_amount", "credit_amount", "currency", "description", "cleared"]
     autocomplete_fields = ["account"]
 
     def has_add_permission(self, request, obj=None):
@@ -54,4 +54,14 @@ class JournalEntryAdmin(admin.ModelAdmin):
     inlines = [JournalLineInline]
 
     def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ReconciliationRecord)
+class ReconciliationRecordAdmin(admin.ModelAdmin):
+    list_display = ["account", "statement_date", "statement_balance", "reconciled_by", "reconciled_at"]
+    list_filter = ["account"]
+    autocomplete_fields = ["account", "reconciled_by"]
+
+    def has_change_permission(self, request, obj=None):
         return False

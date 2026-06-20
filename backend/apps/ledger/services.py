@@ -12,7 +12,13 @@ from apps.ledger.exceptions import (
     JournalEntryAlreadyReversedError,
     UnbalancedJournalEntryError,
 )
-from apps.ledger.models import Account, JournalEntry, JournalEntryStatus, JournalLine
+from apps.ledger.models import (
+    Account,
+    JournalEntry,
+    JournalEntryStatus,
+    JournalLine,
+    ReconciliationRecord,
+)
 
 
 @dataclass(frozen=True)
@@ -152,3 +158,30 @@ def reverse_journal_entry(*, entry, reversed_by_user, reversal_date=None):
         entry.mark_reversed(reversed_by_user)
 
     return reversal
+
+
+def mark_account_reconciled(*, account, statement_date, statement_balance, reconciled_by, notes=""):
+    """
+    Records a ReconciliationRecord and marks every currently-uncleared
+    POSTED JournalLine on this account, dated on or before statement_date,
+    as cleared=True -- regardless of whether it came from an import or was
+    entered manually. Does NOT require every line up to statement_date to
+    already be matched/categorized first: an account can be partially
+    reconciled, with outstanding unmatched items rolling forward to the
+    next pass, mirroring real-world bank reconciliation.
+    """
+    with transaction.atomic():
+        record = ReconciliationRecord.objects.create(
+            account=account,
+            statement_date=statement_date,
+            statement_balance=statement_balance,
+            reconciled_by=reconciled_by,
+            notes=notes,
+        )
+        JournalLine.objects.filter(
+            account=account,
+            journal_entry__entry_date__lte=statement_date,
+            journal_entry__status=JournalEntryStatus.POSTED,
+            cleared=False,
+        ).update(cleared=True)
+    return record

@@ -98,3 +98,104 @@ export interface TokenPair {
   access: string;
   refresh: string;
 }
+
+export type ImportFileFormat = "CSV" | "OFX";
+export type ImportBatchStatus = "PREVIEW" | "IMPORTED" | "FAILED";
+export type ImportedTransactionStatus = "UNMATCHED" | "MATCHED" | "POSTED" | "IGNORED";
+export type AmountConvention = "SIGNED_AMOUNT" | "DEBIT_CREDIT";
+
+export interface ColumnMapping {
+  id: string;
+  account: string;
+  name: string;
+  date_column: string;
+  date_format: string;
+  description_column: string;
+  memo_column: string;
+  amount_convention: AmountConvention;
+  amount_column: string;
+  debit_column: string;
+  credit_column: string;
+  type_column: string;
+  type_debit_value: string;
+  balance_column: string;
+  has_header_row: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ImportBatch {
+  id: string;
+  account: string;
+  file_format: ImportFileFormat;
+  original_filename: string;
+  column_mapping: string | null;
+  status: ImportBatchStatus;
+  statement_start_date: string | null;
+  statement_end_date: string | null;
+  row_count: number;
+  duplicate_count: number;
+  imported_by: string;
+  created_at: string;
+  confirmed_at: string | null;
+}
+
+export interface ImportedTransaction {
+  id: string;
+  import_batch: string;
+  account: string;
+  transaction_date: string;
+  description: string;
+  memo: string;
+  amount: string; // money: string, never number
+  running_balance: string | null;
+  external_id: string;
+  status: ImportedTransactionStatus;
+  matched_line: string | null;
+  created_entry: string | null;
+  matched_by: string | null;
+  matched_at: string | null;
+}
+
+export interface ImportPreviewRow {
+  transaction_date: string;
+  description: string;
+  memo: string;
+  amount: string;
+  running_balance: string | null;
+}
+
+export interface ImportPreviewResponse {
+  file_format: ImportFileFormat;
+  mapped: boolean;
+  headers?: string[];
+  preview_rows: ImportPreviewRow[] | Record<string, string>[];
+  total_row_count: number;
+  available_mappings?: ColumnMapping[];
+}
+
+export interface InlineMappingFields {
+  date_column?: string;
+  date_format?: string;
+  description_column?: string;
+  memo_column?: string;
+  amount_convention?: AmountConvention;
+  amount_column?: string;
+  debit_column?: string;
+  credit_column?: string;
+  type_column?: string;
+  type_debit_value?: string;
+  balance_column?: string;
+  has_header_row?: boolean;
+}
+
+export interface ReconciliationRecord {
+  id: string;
+  account: string;
+  statement_date: string;
+  statement_balance: string;
+  reconciled_by: string;
+  reconciled_at: string;
+  notes: string;
+}

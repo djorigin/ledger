@@ -1,4 +1,4 @@
-import { Navigate, Outlet, useParams } from "react-router-dom";
+import { Link, Navigate, Outlet, useParams } from "react-router-dom";
 
 import { useAuth } from "@/auth/AuthContext";
 import { EntitySwitcher } from "@/components/layout/EntitySwitcher";
@@ -36,6 +36,14 @@ export function AppShell() {
         <div className="flex items-center gap-4">
           <span className="font-semibold">Ledger</span>
           <EntitySwitcher />
+          <nav className="flex items-center gap-3 text-sm text-muted-foreground">
+            <Link to={`/entities/${entityId}/journal-entries`} className="hover:text-foreground">
+              Journal Entries
+            </Link>
+            <Link to={`/entities/${entityId}/accounts`} className="hover:text-foreground">
+              Accounts
+            </Link>
+          </nav>
         </div>
         <UserMenu />
       </header>

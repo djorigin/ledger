@@ -13,7 +13,13 @@ from apps.ledger.exceptions import (
     UnbalancedJournalEntryError,
 )
 from apps.ledger.models import Account, AccountType, JournalEntryStatus
-from apps.ledger.services import JournalLineInput, post_journal_entry, record_simple_transaction, reverse_journal_entry
+from apps.ledger.services import (
+    JournalLineInput,
+    mark_account_reconciled,
+    post_journal_entry,
+    record_simple_transaction,
+    reverse_journal_entry,
+)
 from apps.users.models import User
 
 pytestmark = pytest.mark.django_db
@@ -286,3 +292,98 @@ def test_posted_journal_entry_cannot_be_hard_deleted():
 
     entry.refresh_from_db()
     assert entry.pk is not None
+
+
+def test_mark_account_reconciled_creates_record():
+    entity = make_entity()
+    user = make_user()
+    bank, groceries = make_accounts(entity)
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 6, 1), description="Groceries",
+        debit_account=groceries, credit_account=bank, amount=Decimal("50.00"),
+        currency="AUD", created_by=user,
+    )
+
+    record = mark_account_reconciled(
+        account=bank, statement_date=date(2026, 6, 5),
+        statement_balance=Decimal("950.00"), reconciled_by=user,
+    )
+    assert record.account == bank
+    assert record.statement_date == date(2026, 6, 5)
+    assert record.statement_balance == Decimal("950.00")
+    assert record.reconciled_by == user
+
+
+def test_mark_account_reconciled_clears_matching_lines_up_to_date():
+    entity = make_entity()
+    user = make_user()
+    bank, groceries = make_accounts(entity)
+    early = record_simple_transaction(
+        entity=entity, entry_date=date(2026, 6, 1), description="Early",
+        debit_account=groceries, credit_account=bank, amount=Decimal("50.00"),
+        currency="AUD", created_by=user,
+    )
+    late = record_simple_transaction(
+        entity=entity, entry_date=date(2026, 6, 10), description="Late",
+        debit_account=groceries, credit_account=bank, amount=Decimal("20.00"),
+        currency="AUD", created_by=user,
+    )
+
+    mark_account_reconciled(
+        account=bank, statement_date=date(2026, 6, 5),
+        statement_balance=Decimal("950.00"), reconciled_by=user,
+    )
+
+    early_line = early.lines.get(account=bank)
+    late_line = late.lines.get(account=bank)
+    early_line.refresh_from_db()
+    late_line.refresh_from_db()
+    assert early_line.cleared is True
+    assert late_line.cleared is False
+
+
+def test_mark_account_reconciled_does_not_require_all_lines_matched_first():
+    entity = make_entity()
+    user = make_user()
+    bank, groceries = make_accounts(entity)
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 6, 1), description="Groceries",
+        debit_account=groceries, credit_account=bank, amount=Decimal("50.00"),
+        currency="AUD", created_by=user,
+    )
+
+    # No apps.imports matching/categorization ever happened for this line --
+    # reconciliation must still succeed (it's a ledger-level concept that
+    # works whether or not the import feature was ever used).
+    record = mark_account_reconciled(
+        account=bank, statement_date=date(2026, 6, 5),
+        statement_balance=Decimal("950.00"), reconciled_by=user,
+    )
+    assert record.pk is not None
+
+
+def test_mark_account_reconciled_does_not_reclear_already_cleared_lines():
+    entity = make_entity()
+    user = make_user()
+    bank, groceries = make_accounts(entity)
+    entry = record_simple_transaction(
+        entity=entity, entry_date=date(2026, 6, 1), description="Groceries",
+        debit_account=groceries, credit_account=bank, amount=Decimal("50.00"),
+        currency="AUD", created_by=user,
+    )
+
+    mark_account_reconciled(
+        account=bank, statement_date=date(2026, 6, 5),
+        statement_balance=Decimal("950.00"), reconciled_by=user,
+    )
+    # Re-running for an overlapping/later date must not error, and the
+    # already-cleared line stays cleared (idempotent).
+    mark_account_reconciled(
+        account=bank, statement_date=date(2026, 6, 30),
+        statement_balance=Decimal("950.00"), reconciled_by=user,
+    )
+    line = entry.lines.get(account=bank)
+    assert line.cleared is True
+    from apps.ledger.models import ReconciliationRecord
+
+    assert ReconciliationRecord.objects.filter(account=bank).count() == 2

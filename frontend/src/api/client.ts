@@ -106,7 +106,13 @@ async function performRequest(path: string, options: RequestOptions): Promise<Re
     }
   }
 
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {};
+  const isFormData = options.body instanceof FormData;
+  // Never set Content-Type for FormData -- the browser must generate the
+  // multipart boundary itself; setting it manually breaks the upload.
+  if (!isFormData) {
+    headers["Content-Type"] = "application/json";
+  }
   if (!options.skipAuth && accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
   }
@@ -114,7 +120,12 @@ async function performRequest(path: string, options: RequestOptions): Promise<Re
   return fetch(url.toString(), {
     method: options.method ?? "GET",
     headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    body:
+      options.body === undefined
+        ? undefined
+        : isFormData
+          ? (options.body as FormData)
+          : JSON.stringify(options.body),
   });
 }
 

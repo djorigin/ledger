@@ -526,6 +526,22 @@ yaml = ["PyYAML (>=3.10)"]
 zookeeper = ["kazoo (>=2.8.0)"]
 
 [[package]]
+name = "ofxtools"
+version = "1.1.1"
+description = "Library for working with Open Financial Exchange (OFX) data"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "ofxtools-1.1.1-py3-none-any.whl", hash = "sha256:4c6a80cfd08d8a6ce7e791ce3bc317e203f36359a0961b20df667cf91a9560e9"},
+    {file = "ofxtools-1.1.1.tar.gz", hash = "sha256:b55803e622539e59d04209ec0a289338557973c331d86031e9868d84592912a6"},
+]
+
+[package.extras]
+dev = ["coverage", "coveralls", "ipdb", "mypy", "pytest", "pytest-cov", "ruff", "types-pytz", "types-requests"]
+net = ["requests"]
+
+[[package]]
 name = "packaging"
 version = "26.2"
 description = "Core utilities for Python packages"
@@ -874,4 +890,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "aa047fc282a58101633fc02e36d389e7ae25e262b86982936bdb3c67b0daaaf2"
+content-hash = "b1b61242ad852f71e3445077971ea6b1468819f2f039e6209f4a4b4710beb3a0"
