@@ -6,6 +6,7 @@ live in local.py (dev) and prod.py (deploy) — both import * from here.
 from pathlib import Path
 
 import environ
+from celery.schedules import crontab
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -27,6 +28,7 @@ INSTALLED_APPS = [
     "apps.users",
     "apps.entities",
     "apps.ledger",
+    "apps.currencies",
 ]
 
 MIDDLEWARE = [
@@ -83,5 +85,26 @@ STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Not yet consumed — Celery app + broker config wired in step 3.
 REDIS_URL = env("REDIS_URL", default="redis://redis:6379/0")
+
+# Celery broker/result-backend use distinct logical Redis DBs from the
+# app's general-purpose REDIS_URL (db 0), so a future Redis-backed Django
+# cache or other consumer never collides with Celery's keyspace.
+_redis_host = REDIS_URL.rsplit("/", 1)[0]
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=f"{_redis_host}/1")
+CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=f"{_redis_host}/2")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+# Deliberately UTC, independent of the display TIME_ZONE above -- the beat
+# schedule below is computed in UTC against ECB's publish time, and pinning
+# this avoids the schedule silently shifting if TIME_ZONE ever changes.
+CELERY_TIMEZONE = "UTC"
+CELERY_BEAT_SCHEDULE = {
+    "fetch-latest-exchange-rates-daily": {
+        "task": "apps.currencies.tasks.fetch_latest_exchange_rates",
+        # ECB publishes reference rates ~16:00 CET (~14:00-15:00 UTC
+        # depending on DST). 16:30 UTC gives a safe buffer past either case.
+        "schedule": crontab(hour=16, minute=30),
+    },
+}

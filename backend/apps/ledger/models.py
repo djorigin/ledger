@@ -7,6 +7,7 @@ from django.db import models
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
+from apps.ledger.constants import validate_currency_code
 from apps.ledger.exceptions import JournalEntryImmutableError
 from apps.ledger.managers import AccountQuerySet, JournalEntryQuerySet
 
@@ -44,7 +45,7 @@ class Account(models.Model):
     account_type = models.CharField(max_length=16, choices=AccountType.choices)
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=32, blank=True)
-    native_currency = models.CharField(max_length=3)
+    native_currency = models.CharField(max_length=3, validators=[validate_currency_code])
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -144,7 +145,7 @@ class JournalLine(models.Model):
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="journal_lines")
     debit_amount = models.DecimalField(max_digits=19, decimal_places=4, default=Decimal("0"))
     credit_amount = models.DecimalField(max_digits=19, decimal_places=4, default=Decimal("0"))
-    currency = models.CharField(max_length=3)
+    currency = models.CharField(max_length=3, validators=[validate_currency_code])
     description = models.CharField(max_length=500, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -1,3 +1,4 @@
+from collections import defaultdict
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -33,8 +34,7 @@ def post_journal_entry(*, entity, entry_date, description, lines, created_by, me
     if len(lines) < 2:
         raise InvalidJournalLineError("A journal entry needs at least two lines.")
 
-    total_debit = Decimal("0")
-    total_credit = Decimal("0")
+    totals_by_currency = defaultdict(lambda: {"debit": Decimal("0"), "credit": Decimal("0")})
     for line in lines:
         if line.account.entity_id != entity.id:
             raise CrossEntityAccountError(
@@ -52,13 +52,18 @@ def post_journal_entry(*, entity, entry_date, description, lines, created_by, me
                 "Exactly one of debit_amount or credit_amount must be greater "
                 "than zero per line."
             )
-        total_debit += line.debit_amount
-        total_credit += line.credit_amount
+        totals_by_currency[line.currency]["debit"] += line.debit_amount
+        totals_by_currency[line.currency]["credit"] += line.credit_amount
 
-    if total_debit != total_credit:
-        raise UnbalancedJournalEntryError(
-            f"Journal entry is not balanced: debits={total_debit}, credits={total_credit}."
-        )
+    # Balance must hold within each currency present in the entry, not as a
+    # flat sum across all lines -- a 100 AUD debit and a 100 CNY credit are
+    # not "balanced" just because the numbers match.
+    for currency, totals in totals_by_currency.items():
+        if totals["debit"] != totals["credit"]:
+            raise UnbalancedJournalEntryError(
+                f"Journal entry is not balanced in {currency}: "
+                f"debits={totals['debit']}, credits={totals['credit']}."
+            )
 
     with transaction.atomic():
         entry = JournalEntry(

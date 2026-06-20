@@ -208,6 +208,64 @@ def test_reverse_journal_entry_twice_raises_error():
         reverse_journal_entry(entry=entry, reversed_by_user=user)
 
 
+def make_fx_clearing_accounts(entity):
+    bank_aud = Account.objects.create(
+        entity=entity, account_type=AccountType.ASSET, name="Bank AUD", native_currency="AUD"
+    )
+    bank_cny = Account.objects.create(
+        entity=entity, account_type=AccountType.ASSET, name="Bank CNY", native_currency="CNY"
+    )
+    fx_clearing_aud = Account.objects.create(
+        entity=entity, account_type=AccountType.ASSET, name="FX Clearing AUD", native_currency="AUD"
+    )
+    fx_clearing_cny = Account.objects.create(
+        entity=entity, account_type=AccountType.ASSET, name="FX Clearing CNY", native_currency="CNY"
+    )
+    return bank_aud, bank_cny, fx_clearing_aud, fx_clearing_cny
+
+
+def test_post_journal_entry_accepts_cross_currency_entry_balanced_per_currency():
+    entity = make_entity()
+    user = make_user()
+    bank_aud, bank_cny, fx_clearing_aud, fx_clearing_cny = make_fx_clearing_accounts(entity)
+
+    entry = post_journal_entry(
+        entity=entity,
+        entry_date=date(2026, 1, 1),
+        description="AUD to CNY transfer via FX clearing",
+        created_by=user,
+        lines=[
+            JournalLineInput(account=fx_clearing_aud, currency="AUD", debit_amount=Decimal("100")),
+            JournalLineInput(account=bank_aud, currency="AUD", credit_amount=Decimal("100")),
+            JournalLineInput(account=bank_cny, currency="CNY", debit_amount=Decimal("470")),
+            JournalLineInput(account=fx_clearing_cny, currency="CNY", credit_amount=Decimal("470")),
+        ],
+    )
+    assert entry.lines.count() == 4
+
+
+def test_post_journal_entry_rejects_cross_currency_entry_not_balanced_per_currency():
+    entity = make_entity()
+    user = make_user()
+    bank_aud, bank_cny, fx_clearing_aud, fx_clearing_cny = make_fx_clearing_accounts(entity)
+
+    # Flat sums match (100 == 100) but this is accounting-nonsense: the AUD
+    # leg alone is unbalanced (100 debit, 0 credit) and the CNY leg alone is
+    # unbalanced (0 debit, 100 credit). Before the per-currency fix this
+    # incorrectly passed.
+    with pytest.raises(UnbalancedJournalEntryError):
+        post_journal_entry(
+            entity=entity,
+            entry_date=date(2026, 1, 1),
+            description="bad cross-currency entry",
+            created_by=user,
+            lines=[
+                JournalLineInput(account=fx_clearing_aud, currency="AUD", debit_amount=Decimal("100")),
+                JournalLineInput(account=fx_clearing_cny, currency="CNY", credit_amount=Decimal("100")),
+            ],
+        )
+
+
 def test_posted_journal_entry_cannot_be_hard_deleted():
     entity = make_entity()
     user = make_user()

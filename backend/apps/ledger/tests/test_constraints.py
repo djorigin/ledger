@@ -80,6 +80,37 @@ def test_journal_line_check_constraint_rejects_both_sides_nonzero():
             )
 
 
+def test_unbalanced_cross_currency_lines_rejected_at_db_commit():
+    entity, user, bank, groceries = make_entity_user_accounts()
+    cny_account = Account.objects.create(
+        entity=entity, account_type=AccountType.ASSET, name="Bank CNY", native_currency="CNY"
+    )
+
+    # Flat sums match (100 AUD debit == 100 CNY credit) but each currency is
+    # individually unbalanced -- this must be rejected by the trigger's
+    # per-currency GROUP BY check, independent of post_journal_entry's
+    # Python-level check (bypassed here via raw .create() calls).
+    with pytest.raises(Exception):
+        with transaction.atomic():
+            entry = JournalEntry.objects.create(
+                entity=entity,
+                entry_date=date(2026, 1, 1),
+                description="bad-cross-currency",
+                status=JournalEntryStatus.POSTED,
+                created_by=user,
+            )
+            JournalLine.objects.create(
+                journal_entry=entry, account=bank,
+                debit_amount=Decimal("100"), credit_amount=Decimal("0"), currency="AUD",
+            )
+            JournalLine.objects.create(
+                journal_entry=entry, account=cny_account,
+                debit_amount=Decimal("0"), credit_amount=Decimal("100"), currency="CNY",
+            )
+
+    assert not JournalEntry.objects.filter(description="bad-cross-currency").exists()
+
+
 def test_journal_line_check_constraint_rejects_both_sides_zero():
     entity, user, bank, groceries = make_entity_user_accounts()
     entry = JournalEntry.objects.create(
