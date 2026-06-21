@@ -12,7 +12,9 @@ from apps.reports.services import (
     compute_account_ledger,
     compute_balance_sheet,
     compute_budget_vs_actual,
+    compute_cash_flow_statement,
     compute_income_statement,
+    compute_net_worth,
     compute_trial_balance,
 )
 from apps.users.models import User
@@ -284,3 +286,169 @@ def test_budget_vs_actual_aggregates_across_currencies():
     # 500 AUD + (1000 CNY * 0.2) = 700 budgeted; 100 AUD + (200 CNY * 0.2) = 140 actual
     assert report.total_budgeted_converted == Decimal("700")
     assert report.total_actual_converted == Decimal("140")
+
+
+def test_cash_flow_classifies_operating_investing_financing():
+    entity = make_entity()
+    user = make_user()
+    bank, groceries, salary = make_accounts(entity)
+    bank.is_cash_equivalent = True
+    bank.save()
+    property_account = Account.objects.create(
+        entity=entity, account_type=AccountType.ASSET, name="Property", native_currency="AUD"
+    )
+    mortgage = Account.objects.create(
+        entity=entity, account_type=AccountType.LIABILITY, name="Mortgage", native_currency="AUD"
+    )
+
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 1), description="Salary",
+        debit_account=bank, credit_account=salary, amount=Decimal("1000"),
+        currency="AUD", created_by=user,
+    )
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 5), description="Groceries",
+        debit_account=groceries, credit_account=bank, amount=Decimal("200"),
+        currency="AUD", created_by=user,
+    )
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 10), description="Buy land",
+        debit_account=property_account, credit_account=bank, amount=Decimal("300"),
+        currency="AUD", created_by=user,
+    )
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 15), description="Mortgage draw",
+        debit_account=bank, credit_account=mortgage, amount=Decimal("500"),
+        currency="AUD", created_by=user,
+    )
+
+    report = compute_cash_flow_statement(
+        entity, period_start=date(2026, 1, 1), period_end=date(2026, 1, 31), reporting_currency="AUD"
+    )
+    assert report.operating_total == Decimal("800")  # +1000 salary - 200 groceries
+    assert report.investing_total == Decimal("-300")  # bought property
+    assert report.financing_total == Decimal("500")  # mortgage draw
+    assert report.other_total == Decimal("0")
+    assert report.net_change == Decimal("1000")
+    assert report.reconciles is True
+
+
+def test_cash_flow_excludes_internal_transfer_between_cash_accounts():
+    entity = make_entity()
+    user = make_user()
+    bank, groceries, salary = make_accounts(entity)
+    bank.is_cash_equivalent = True
+    bank.save()
+    savings = Account.objects.create(
+        entity=entity, account_type=AccountType.ASSET, name="Savings",
+        native_currency="AUD", is_cash_equivalent=True,
+    )
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 5), description="Move to savings",
+        debit_account=savings, credit_account=bank, amount=Decimal("400"),
+        currency="AUD", created_by=user,
+    )
+
+    report = compute_cash_flow_statement(
+        entity, period_start=date(2026, 1, 1), period_end=date(2026, 1, 31), reporting_currency="AUD"
+    )
+    assert report.operating_total == report.investing_total == report.financing_total == Decimal("0")
+    assert report.net_change == Decimal("0")
+    assert report.reconciles is True
+
+
+def test_cash_flow_reconciles_after_reversal():
+    entity = make_entity()
+    user = make_user()
+    bank, groceries, salary = make_accounts(entity)
+    bank.is_cash_equivalent = True
+    bank.save()
+    entry = record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 5), description="Groceries",
+        debit_account=groceries, credit_account=bank, amount=Decimal("200"),
+        currency="AUD", created_by=user,
+    )
+    reverse_journal_entry(entry=entry, reversed_by_user=user, reversal_date=date(2026, 1, 10))
+
+    report = compute_cash_flow_statement(
+        entity, period_start=date(2026, 1, 1), period_end=date(2026, 1, 31), reporting_currency="AUD"
+    )
+    assert report.operating_total == Decimal("0")
+    assert report.net_change == Decimal("0")
+    assert report.reconciles is True
+
+
+def test_net_worth_single_entity_matches_assets_minus_liabilities():
+    entity = make_entity()
+    user = make_user()
+    bank, groceries, salary = make_accounts(entity)
+    mortgage = Account.objects.create(
+        entity=entity, account_type=AccountType.LIABILITY, name="Mortgage", native_currency="AUD"
+    )
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 1), description="Salary",
+        debit_account=bank, credit_account=salary, amount=Decimal("1000"),
+        currency="AUD", created_by=user,
+    )
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 5), description="Draw",
+        debit_account=bank, credit_account=mortgage, amount=Decimal("300"),
+        currency="AUD", created_by=user,
+    )
+
+    report = compute_net_worth([entity], as_of=date(2026, 1, 31), reporting_currency="AUD")
+    row = report.rows[0]
+    assert row.total_assets == Decimal("1300")
+    assert row.total_liabilities == Decimal("300")
+    assert row.net_worth == Decimal("1000")
+    assert report.consolidated_net_worth == Decimal("1000")
+
+
+def test_net_worth_consolidates_across_entities_in_different_currencies():
+    entity_a = make_entity("Household")
+    entity_b = make_entity("Business")
+    user = make_user()
+    bank_a, groceries_a, salary_a = make_accounts(entity_a)
+    bank_b = Account.objects.create(
+        entity=entity_b, account_type=AccountType.ASSET, name="CNY Bank", native_currency="CNY"
+    )
+    salary_b = Account.objects.create(
+        entity=entity_b, account_type=AccountType.INCOME, name="CNY Income", native_currency="CNY"
+    )
+    ExchangeRate.objects.create(
+        date=date(2026, 1, 1), from_currency="CNY", to_currency="AUD", rate=Decimal("0.2")
+    )
+    record_simple_transaction(
+        entity=entity_a, entry_date=date(2026, 1, 1), description="Salary",
+        debit_account=bank_a, credit_account=salary_a, amount=Decimal("1000"),
+        currency="AUD", created_by=user,
+    )
+    record_simple_transaction(
+        entity=entity_b, entry_date=date(2026, 1, 1), description="Income",
+        debit_account=bank_b, credit_account=salary_b, amount=Decimal("500"),
+        currency="CNY", created_by=user,
+    )
+
+    report = compute_net_worth(
+        [entity_a, entity_b], as_of=date(2026, 1, 31), reporting_currency="AUD"
+    )
+    assert len(report.rows) == 2
+    # 1000 AUD + (500 CNY * 0.2) = 1100 AUD
+    assert report.consolidated_net_worth == Decimal("1100")
+
+
+def test_net_worth_excludes_entities_not_passed_in():
+    entity_a = make_entity("Household")
+    entity_b = make_entity("Other family's entity")
+    user = make_user()
+    bank_a, groceries_a, salary_a = make_accounts(entity_a)
+    record_simple_transaction(
+        entity=entity_a, entry_date=date(2026, 1, 1), description="Salary",
+        debit_account=bank_a, credit_account=salary_a, amount=Decimal("1000"),
+        currency="AUD", created_by=user,
+    )
+    # entity_b has no accounts/transactions and is simply not passed in --
+    # simulates a user without access to it.
+    report = compute_net_worth([entity_a], as_of=date(2026, 1, 31), reporting_currency="AUD")
+    assert len(report.rows) == 1
+    assert report.rows[0].entity == entity_a

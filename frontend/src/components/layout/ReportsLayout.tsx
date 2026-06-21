@@ -3,9 +3,11 @@ import { NavLink, Outlet, useParams } from "react-router-dom";
 const REPORTS = [
   { path: "trial-balance", label: "Trial Balance" },
   { path: "balance-sheet", label: "Balance Sheet" },
+  { path: "cash-flow", label: "Cash Flow Statement" },
   { path: "income-statement", label: "Income Statement" },
   { path: "account-ledger", label: "Account Ledger" },
   { path: "budget-vs-actual", label: "Budget vs Actual" },
+  { path: "net-worth", label: "Net Worth" },
 ];
 
 export function ReportsLayout() {

@@ -3,7 +3,9 @@ import type {
   AccountLedgerReport,
   BalanceSheetReport,
   BudgetVsActualReport,
+  CashFlowReport,
   IncomeStatementReport,
+  NetWorthReport,
   TrialBalanceReport,
 } from "@/types/api";
 
@@ -55,5 +57,27 @@ export function getBudgetVsActual(
 ): Promise<BudgetVsActualReport> {
   return apiRequest<BudgetVsActualReport>("/reports/budget-vs-actual/", {
     searchParams: { entity: entityId, reporting_currency: reportingCurrency },
+  });
+}
+
+export function getCashFlow(
+  entityId: string,
+  periodStart: string,
+  periodEnd: string,
+  reportingCurrency: string,
+): Promise<CashFlowReport> {
+  return apiRequest<CashFlowReport>("/reports/cash-flow/", {
+    searchParams: {
+      entity: entityId,
+      period_start: periodStart,
+      period_end: periodEnd,
+      reporting_currency: reportingCurrency,
+    },
+  });
+}
+
+export function getNetWorth(reportingCurrency: string, asOf?: string): Promise<NetWorthReport> {
+  return apiRequest<NetWorthReport>("/reports/net-worth/", {
+    searchParams: { reporting_currency: reportingCurrency, as_of: asOf },
   });
 }

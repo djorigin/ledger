@@ -23,7 +23,9 @@ from apps.api.views.reports import (
     AccountLedgerView,
     BalanceSheetView,
     BudgetVsActualView,
+    CashFlowView,
     IncomeStatementView,
+    NetWorthView,
     TrialBalanceView,
 )
 
@@ -69,5 +71,7 @@ urlpatterns = [
         BudgetVsActualView.as_view(),
         name="report-budget-vs-actual",
     ),
+    path("reports/cash-flow/", CashFlowView.as_view(), name="report-cash-flow"),
+    path("reports/net-worth/", NetWorthView.as_view(), name="report-net-worth"),
     path("", include(router.urls)),
 ]

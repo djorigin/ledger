@@ -35,6 +35,7 @@ export interface Account {
   code: string;
   native_currency: string;
   is_active: boolean;
+  is_cash_equivalent: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -383,4 +384,33 @@ export interface BudgetVsActualReport {
   total_budgeted_converted: string;
   total_actual_converted: string;
   overall_percent_used: string | null;
+}
+
+export interface CashFlowReport {
+  period_start: string;
+  period_end: string;
+  reporting_currency: string;
+  opening_cash: string;
+  operating_total: string;
+  investing_total: string;
+  financing_total: string;
+  other_total: string;
+  net_change: string;
+  closing_cash: string;
+  reconciles: boolean;
+}
+
+export interface EntityNetWorthRow {
+  entity_id: string;
+  entity_name: string;
+  total_assets: string;
+  total_liabilities: string;
+  net_worth: string;
+}
+
+export interface NetWorthReport {
+  as_of: string;
+  reporting_currency: string;
+  rows: EntityNetWorthRow[];
+  consolidated_net_worth: string;
 }

@@ -15,7 +15,7 @@ class AccountSerializer(serializers.ModelSerializer):
         model = Account
         fields = [
             "id", "entity", "parent", "account_type", "name", "code",
-            "native_currency", "is_active", "created_at", "updated_at",
+            "native_currency", "is_active", "is_cash_equivalent", "created_at", "updated_at",
         ]
         read_only_fields = fields
 

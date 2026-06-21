@@ -15,7 +15,9 @@ import { ReconciliationPage } from "@/pages/ReconciliationPage";
 import { AccountLedgerPage } from "@/pages/reports/AccountLedgerPage";
 import { BalanceSheetPage } from "@/pages/reports/BalanceSheetPage";
 import { BudgetVsActualPage } from "@/pages/reports/BudgetVsActualPage";
+import { CashFlowStatementPage } from "@/pages/reports/CashFlowStatementPage";
 import { IncomeStatementPage } from "@/pages/reports/IncomeStatementPage";
+import { NetWorthPage } from "@/pages/reports/NetWorthPage";
 import { TrialBalancePage } from "@/pages/reports/TrialBalancePage";
 import { SavingsGoalsPage } from "@/pages/SavingsGoalsPage";
 import { SuperannuationPage } from "@/pages/SuperannuationPage";
@@ -55,9 +57,11 @@ export default function App() {
             <Route index element={<Navigate to="trial-balance" replace />} />
             <Route path="trial-balance" element={<TrialBalancePage />} />
             <Route path="balance-sheet" element={<BalanceSheetPage />} />
+            <Route path="cash-flow" element={<CashFlowStatementPage />} />
             <Route path="income-statement" element={<IncomeStatementPage />} />
             <Route path="account-ledger" element={<AccountLedgerPage />} />
             <Route path="budget-vs-actual" element={<BudgetVsActualPage />} />
+            <Route path="net-worth" element={<NetWorthPage />} />
           </Route>
         </Route>
       </Route>

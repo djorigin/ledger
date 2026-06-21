@@ -7,14 +7,17 @@ class AccountInline(admin.TabularInline):
     model = Account
     fk_name = "parent"
     extra = 0
-    fields = ["name", "account_type", "code", "native_currency", "is_active"]
+    fields = ["name", "account_type", "code", "native_currency", "is_active", "is_cash_equivalent"]
     show_change_link = True
 
 
 @admin.register(Account)
 class AccountAdmin(admin.ModelAdmin):
-    list_display = ["name", "account_type", "entity", "parent", "native_currency", "is_active"]
-    list_filter = ["account_type", "entity", "native_currency", "is_active"]
+    list_display = [
+        "name", "account_type", "entity", "parent", "native_currency",
+        "is_active", "is_cash_equivalent",
+    ]
+    list_filter = ["account_type", "entity", "native_currency", "is_active", "is_cash_equivalent"]
     search_fields = ["name", "code"]
     autocomplete_fields = ["entity", "parent"]
     inlines = [AccountInline]

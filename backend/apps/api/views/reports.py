@@ -1,4 +1,5 @@
 from django.http import Http404
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -10,8 +11,12 @@ from apps.api.serializers.reports import (
     BalanceSheetReportSerializer,
     BudgetVsActualQuerySerializer,
     BudgetVsActualReportSerializer,
+    CashFlowQuerySerializer,
+    CashFlowReportSerializer,
     IncomeStatementQuerySerializer,
     IncomeStatementReportSerializer,
+    NetWorthQuerySerializer,
+    NetWorthReportSerializer,
     TrialBalanceQuerySerializer,
     TrialBalanceReportSerializer,
 )
@@ -21,7 +26,9 @@ from apps.reports.services import (
     compute_account_ledger,
     compute_balance_sheet,
     compute_budget_vs_actual,
+    compute_cash_flow_statement,
     compute_income_statement,
+    compute_net_worth,
     compute_trial_balance,
 )
 
@@ -222,3 +229,70 @@ class BudgetVsActualView(_ReportView):
             "overall_percent_used": report.overall_percent_used,
         }
         return Response(BudgetVsActualReportSerializer(data).data)
+
+
+class CashFlowView(_ReportView):
+    def get(self, request):
+        query = CashFlowQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        entity = _get_entity(request, query.validated_data["entity"])
+        self.check_object_permissions(request, entity)
+
+        report = compute_cash_flow_statement(
+            entity,
+            period_start=query.validated_data["period_start"],
+            period_end=query.validated_data["period_end"],
+            reporting_currency=query.validated_data["reporting_currency"],
+        )
+        data = {
+            "period_start": report.period_start,
+            "period_end": report.period_end,
+            "reporting_currency": report.reporting_currency,
+            "opening_cash": report.opening_cash,
+            "operating_total": report.operating_total,
+            "investing_total": report.investing_total,
+            "financing_total": report.financing_total,
+            "other_total": report.other_total,
+            "net_change": report.net_change,
+            "closing_cash": report.closing_cash,
+            "reconciles": report.reconciles,
+        }
+        return Response(CashFlowReportSerializer(data).data)
+
+
+class NetWorthView(APIView):
+    """
+    Not scoped to a single entity -- the brief's "family net worth rollup"
+    spans every entity the user has access to. There's no single object to
+    check HasEntityRole against, so the accessible_by(user) queryset itself
+    is the access boundary (same precedent as EntityViewSet's list action).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = NetWorthQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+
+        entities = Entity.objects.accessible_by(request.user)
+        report = compute_net_worth(
+            entities,
+            as_of=query.validated_data.get("as_of"),
+            reporting_currency=query.validated_data["reporting_currency"],
+        )
+        data = {
+            "as_of": report.as_of,
+            "reporting_currency": report.reporting_currency,
+            "rows": [
+                {
+                    "entity_id": row.entity.id,
+                    "entity_name": row.entity.name,
+                    "total_assets": row.total_assets,
+                    "total_liabilities": row.total_liabilities,
+                    "net_worth": row.net_worth,
+                }
+                for row in report.rows
+            ],
+            "consolidated_net_worth": report.consolidated_net_worth,
+        }
+        return Response(NetWorthReportSerializer(data).data)

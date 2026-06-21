@@ -36,6 +36,18 @@ class BudgetVsActualQuerySerializer(serializers.Serializer):
     reporting_currency = serializers.CharField(validators=[validate_currency_code])
 
 
+class CashFlowQuerySerializer(serializers.Serializer):
+    entity = serializers.UUIDField()
+    period_start = serializers.DateField()
+    period_end = serializers.DateField()
+    reporting_currency = serializers.CharField(validators=[validate_currency_code])
+
+
+class NetWorthQuerySerializer(serializers.Serializer):
+    as_of = serializers.DateField(required=False)
+    reporting_currency = serializers.CharField(validators=[validate_currency_code])
+
+
 # --- output shapes -----------------------------------------------------------
 
 
@@ -140,3 +152,32 @@ class BudgetVsActualReportSerializer(serializers.Serializer):
     total_budgeted_converted = MoneyField()
     total_actual_converted = MoneyField()
     overall_percent_used = serializers.DecimalField(max_digits=9, decimal_places=2, allow_null=True)
+
+
+class CashFlowReportSerializer(serializers.Serializer):
+    period_start = serializers.DateField()
+    period_end = serializers.DateField()
+    reporting_currency = serializers.CharField()
+    opening_cash = MoneyField()
+    operating_total = MoneyField()
+    investing_total = MoneyField()
+    financing_total = MoneyField()
+    other_total = MoneyField()
+    net_change = MoneyField()
+    closing_cash = MoneyField()
+    reconciles = serializers.BooleanField()
+
+
+class EntityNetWorthRowSerializer(serializers.Serializer):
+    entity_id = serializers.UUIDField()
+    entity_name = serializers.CharField()
+    total_assets = MoneyField()
+    total_liabilities = MoneyField()
+    net_worth = MoneyField()
+
+
+class NetWorthReportSerializer(serializers.Serializer):
+    as_of = serializers.DateField()
+    reporting_currency = serializers.CharField()
+    rows = EntityNetWorthRowSerializer(many=True)
+    consolidated_net_worth = MoneyField()

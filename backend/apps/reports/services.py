@@ -7,7 +7,14 @@ from django.utils import timezone
 from apps.budgets.models import Budget
 from apps.budgets.services import compute_budget_progress
 from apps.currencies.services import convert
-from apps.ledger.models import Account, AccountType, DebitCredit, JournalEntryStatus, JournalLine
+from apps.ledger.models import (
+    Account,
+    AccountType,
+    DebitCredit,
+    JournalEntry,
+    JournalEntryStatus,
+    JournalLine,
+)
 from apps.ledger.services import get_account_balance, get_account_period_activity
 
 
@@ -359,4 +366,205 @@ def compute_budget_vs_actual(entity, *, reporting_currency) -> BudgetVsActualRep
         total_budgeted_converted=total_budgeted,
         total_actual_converted=total_actual,
         overall_percent_used=overall_percent_used,
+    )
+
+
+class CashFlowCategory:
+    OPERATING = "OPERATING"
+    INVESTING = "INVESTING"
+    FINANCING = "FINANCING"
+    OTHER = "OTHER"
+
+
+_OPERATING_TYPES = {AccountType.INCOME, AccountType.EXPENSE}
+_FINANCING_TYPES = {AccountType.LIABILITY, AccountType.EQUITY}
+
+
+def _classify_cash_flow(non_cash_lines) -> str:
+    """
+    A real indirect-method statement needs accrual concepts (current vs.
+    non-current classification, AP/AR) this system deliberately doesn't
+    model -- so this is a direct-method classification based on what each
+    cash-touching entry's *other* lines are. If an entry's non-cash lines
+    are a mix of categories, classifying it as any single one would be a
+    guess, so it's surfaced honestly as OTHER instead.
+    """
+    types = {line.account.account_type for line in non_cash_lines}
+    if types <= _OPERATING_TYPES:
+        return CashFlowCategory.OPERATING
+    if types == {AccountType.ASSET}:
+        return CashFlowCategory.INVESTING
+    if types <= _FINANCING_TYPES:
+        return CashFlowCategory.FINANCING
+    return CashFlowCategory.OTHER
+
+
+@dataclass(frozen=True)
+class CashFlowReport:
+    period_start: date
+    period_end: date
+    reporting_currency: str
+    opening_cash: Decimal
+    operating_total: Decimal
+    investing_total: Decimal
+    financing_total: Decimal
+    other_total: Decimal
+    net_change: Decimal
+    closing_cash: Decimal
+    reconciles: bool
+
+
+def compute_cash_flow_statement(entity, *, period_start, period_end, reporting_currency) -> CashFlowReport:
+    """
+    Direct-method cash flow statement over [period_start, period_end].
+    `is_cash_equivalent=True` accounts define what counts as "cash" --
+    account_type=ASSET alone can't distinguish a bank account from a
+    property or superannuation balance. Entries with no non-cash line (a
+    transfer between two cash accounts) are excluded entirely -- they
+    don't change the entity's total cash position, so they aren't a "cash
+    flow" in this statement's sense even though both legs touch cash.
+    `reconciles` should always be True; exposed so a future bug becomes
+    visible instead of silently wrong, same as `balances` on the balance
+    sheet.
+    """
+    cash_accounts = Account.objects.filter(entity=entity, is_active=True, is_cash_equivalent=True)
+    cash_account_ids = set(cash_accounts.values_list("id", flat=True))
+
+    opening_cash = sum(
+        (
+            convert(
+                amount=get_account_balance(a, as_of=period_start - timedelta(days=1)),
+                from_currency=a.native_currency,
+                to_currency=reporting_currency,
+                on_date=period_start - timedelta(days=1),
+            )
+            for a in cash_accounts
+        ),
+        Decimal("0"),
+    )
+    closing_cash = sum(
+        (
+            convert(
+                amount=get_account_balance(a, as_of=period_end),
+                from_currency=a.native_currency,
+                to_currency=reporting_currency,
+                on_date=period_end,
+            )
+            for a in cash_accounts
+        ),
+        Decimal("0"),
+    )
+
+    totals = {
+        CashFlowCategory.OPERATING: Decimal("0"),
+        CashFlowCategory.INVESTING: Decimal("0"),
+        CashFlowCategory.FINANCING: Decimal("0"),
+        CashFlowCategory.OTHER: Decimal("0"),
+    }
+
+    entries = (
+        JournalEntry.objects.filter(
+            entity=entity,
+            entry_date__gte=period_start,
+            entry_date__lte=period_end,
+            lines__account__in=cash_accounts,
+        )
+        .exclude(status=JournalEntryStatus.DRAFT)
+        .distinct()
+        .prefetch_related("lines__account")
+    )
+
+    for entry in entries:
+        lines = list(entry.lines.all())
+        cash_lines = [line for line in lines if line.account_id in cash_account_ids]
+        non_cash_lines = [line for line in lines if line.account_id not in cash_account_ids]
+        if not non_cash_lines:
+            continue
+
+        category = _classify_cash_flow(non_cash_lines)
+        for line in cash_lines:
+            signed = line.debit_amount - line.credit_amount
+            converted = convert(
+                amount=signed,
+                from_currency=line.currency,
+                to_currency=reporting_currency,
+                on_date=entry.entry_date,
+            )
+            totals[category] += converted
+
+    net_change = sum(totals.values(), Decimal("0"))
+
+    return CashFlowReport(
+        period_start=period_start,
+        period_end=period_end,
+        reporting_currency=reporting_currency,
+        opening_cash=opening_cash,
+        operating_total=totals[CashFlowCategory.OPERATING],
+        investing_total=totals[CashFlowCategory.INVESTING],
+        financing_total=totals[CashFlowCategory.FINANCING],
+        other_total=totals[CashFlowCategory.OTHER],
+        net_change=net_change,
+        closing_cash=closing_cash,
+        reconciles=(opening_cash + net_change == closing_cash),
+    )
+
+
+@dataclass(frozen=True)
+class EntityNetWorthRow:
+    entity: object
+    total_assets: Decimal
+    total_liabilities: Decimal
+    net_worth: Decimal
+
+
+@dataclass(frozen=True)
+class NetWorthReport:
+    as_of: date
+    reporting_currency: str
+    rows: list[EntityNetWorthRow]
+    consolidated_net_worth: Decimal
+
+
+def compute_net_worth(entities, *, as_of=None, reporting_currency) -> NetWorthReport:
+    """
+    Per the brief's "family net worth rollup... across all entities the
+    logged-in user has access to" -- the one report not scoped to a
+    single entity. `entities` must already be access-filtered by the
+    caller (the view resolves via Entity.objects.accessible_by(user)).
+    Each entity's net worth is assets minus liabilities, both converted
+    via the same _converted_balance helper the balance sheet uses.
+    """
+    as_of = as_of or timezone.now().date()
+    rows = []
+    for entity in entities:
+        active = Account.objects.filter(entity=entity, is_active=True)
+        total_assets = sum(
+            (
+                _converted_balance(a, as_of=as_of, reporting_currency=reporting_currency)
+                for a in active.filter(account_type=AccountType.ASSET)
+            ),
+            Decimal("0"),
+        )
+        total_liabilities = sum(
+            (
+                _converted_balance(a, as_of=as_of, reporting_currency=reporting_currency)
+                for a in active.filter(account_type=AccountType.LIABILITY)
+            ),
+            Decimal("0"),
+        )
+        rows.append(
+            EntityNetWorthRow(
+                entity=entity,
+                total_assets=total_assets,
+                total_liabilities=total_liabilities,
+                net_worth=total_assets - total_liabilities,
+            )
+        )
+
+    consolidated_net_worth = sum((r.net_worth for r in rows), Decimal("0"))
+    return NetWorthReport(
+        as_of=as_of,
+        reporting_currency=reporting_currency,
+        rows=rows,
+        consolidated_net_worth=consolidated_net_worth,
     )

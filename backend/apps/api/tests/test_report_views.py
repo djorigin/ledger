@@ -124,3 +124,60 @@ def test_account_ledger_no_account_access_returns_404():
     client = authenticated_client(user)
     response = client.get(f"/api/v1/reports/account-ledger/?account={bank.id}")
     assert response.status_code == 404
+
+
+def test_viewer_can_read_cash_flow():
+    user = make_user()
+    entity = make_entity()
+    make_membership(user, entity, EntityRole.VIEWER)
+    bank, groceries = make_accounts(entity)
+    bank.is_cash_equivalent = True
+    bank.save()
+    _seed_transaction(entity, bank, groceries, user)
+
+    client = authenticated_client(user)
+    response = client.get(
+        f"/api/v1/reports/cash-flow/?entity={entity.id}"
+        "&period_start=2026-01-01&period_end=2026-01-31&reporting_currency=AUD"
+    )
+    assert response.status_code == 200
+    assert response.data["reconciles"] is True
+
+
+def test_no_membership_user_gets_404_for_cash_flow():
+    user = make_user()
+    entity = make_entity()
+    make_accounts(entity)
+    # no membership
+
+    client = authenticated_client(user)
+    response = client.get(
+        f"/api/v1/reports/cash-flow/?entity={entity.id}"
+        "&period_start=2026-01-01&period_end=2026-01-31&reporting_currency=AUD"
+    )
+    assert response.status_code == 404
+
+
+def test_net_worth_includes_only_accessible_entities():
+    user_a = make_user("a@example.com")
+    user_b = make_user("b@example.com")
+    entity_a = make_entity("Household A")
+    entity_b = make_entity("Household B")
+    make_membership(user_a, entity_a, EntityRole.VIEWER)
+    make_membership(user_b, entity_b, EntityRole.VIEWER)
+    make_accounts(entity_a)
+    make_accounts(entity_b)
+
+    client = authenticated_client(user_a)
+    response = client.get("/api/v1/reports/net-worth/?reporting_currency=AUD")
+    assert response.status_code == 200
+    entity_ids = {row["entity_id"] for row in response.data["rows"]}
+    assert str(entity_a.id) in entity_ids
+    assert str(entity_b.id) not in entity_ids
+
+
+def test_net_worth_missing_reporting_currency_returns_400():
+    user = make_user()
+    client = authenticated_client(user)
+    response = client.get("/api/v1/reports/net-worth/")
+    assert response.status_code == 400

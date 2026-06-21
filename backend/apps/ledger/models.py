@@ -47,6 +47,11 @@ class Account(models.Model):
     code = models.CharField(max_length=32, blank=True)
     native_currency = models.CharField(max_length=3, validators=[validate_currency_code])
     is_active = models.BooleanField(default=True)
+    # Distinguishes actual cash/bank ASSET accounts from other assets
+    # (property, superannuation) for the Cash Flow Statement -- account_type
+    # alone can't tell the two apart. Opt-in (default False); set via admin,
+    # same place the chart of accounts itself is managed.
+    is_cash_equivalent = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
