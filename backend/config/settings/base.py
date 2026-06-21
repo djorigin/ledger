@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "apps.imports",
     "apps.budgets",
     "apps.reports",
+    "apps.ap_ar",
     "apps.api",
 ]
 

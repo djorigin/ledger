@@ -414,3 +414,77 @@ export interface NetWorthReport {
   rows: EntityNetWorthRow[];
   consolidated_net_worth: string;
 }
+
+export type BillOrInvoiceStatus = "OPEN" | "PARTIALLY_PAID" | "PAID" | "CANCELLED";
+
+export interface BillPayment {
+  id: number;
+  payment_date: string;
+  amount: string;
+  payment_account: string;
+  journal_entry: string;
+  created_at: string;
+}
+
+export interface Bill {
+  id: string;
+  entity: string;
+  vendor_name: string;
+  description: string;
+  bill_date: string;
+  due_date: string;
+  amount: string;
+  currency: string;
+  expense_account: string;
+  payable_account: string;
+  journal_entry: string;
+  is_cancelled: boolean;
+  payments: BillPayment[];
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BillProgress {
+  amount: string;
+  amount_paid: string;
+  amount_due: string;
+  status: BillOrInvoiceStatus;
+  is_overdue: boolean;
+}
+
+export interface InvoicePayment {
+  id: number;
+  payment_date: string;
+  amount: string;
+  payment_account: string;
+  journal_entry: string;
+  created_at: string;
+}
+
+export interface Invoice {
+  id: string;
+  entity: string;
+  customer_name: string;
+  description: string;
+  invoice_date: string;
+  due_date: string;
+  amount: string;
+  currency: string;
+  income_account: string;
+  receivable_account: string;
+  journal_entry: string;
+  is_cancelled: boolean;
+  payments: InvoicePayment[];
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InvoiceProgress {
+  amount: string;
+  amount_paid: string;
+  amount_due: string;
+  status: BillOrInvoiceStatus;
+  is_overdue: boolean;
+}

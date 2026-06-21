@@ -5,8 +5,10 @@ import { AppShell } from "@/components/layout/AppShell";
 import { ReportsLayout } from "@/components/layout/ReportsLayout";
 import { getLastSelectedEntityId } from "@/lib/entityStorage";
 import { AccountsPage } from "@/pages/AccountsPage";
+import { BillsPage } from "@/pages/BillsPage";
 import { BudgetsPage } from "@/pages/BudgetsPage";
 import { ImportPage } from "@/pages/ImportPage";
+import { InvoicesPage } from "@/pages/InvoicesPage";
 import { JournalEntriesPage } from "@/pages/JournalEntriesPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
@@ -53,6 +55,8 @@ export default function App() {
           <Route path="savings-goals" element={<SavingsGoalsPage />} />
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="superannuation" element={<SuperannuationPage />} />
+          <Route path="bills" element={<BillsPage />} />
+          <Route path="invoices" element={<InvoicesPage />} />
           <Route path="reports" element={<ReportsLayout />}>
             <Route index element={<Navigate to="trial-balance" replace />} />
             <Route path="trial-balance" element={<TrialBalancePage />} />

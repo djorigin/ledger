@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
+from apps.api.views.ap_ar import BillViewSet, InvoiceViewSet
 from apps.api.views.auth import EmailTokenObtainPairView, MeView
 from apps.api.views.budgets import (
     BudgetViewSet,
@@ -39,6 +40,8 @@ router.register("imported-transactions", ImportedTransactionViewSet, basename="i
 router.register("budgets", BudgetViewSet, basename="budget")
 router.register("savings-goals", SavingsGoalViewSet, basename="savings-goal")
 router.register("projects", ProjectViewSet, basename="project")
+router.register("bills", BillViewSet, basename="bill")
+router.register("invoices", InvoiceViewSet, basename="invoice")
 
 urlpatterns = [
     path("auth/login/", EmailTokenObtainPairView.as_view(), name="auth-login"),
