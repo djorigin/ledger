@@ -1,0 +1,108 @@
+# Production stack -- parallel to docker-compose.yml (dev), not a
+# replacement. Run with: docker compose -f docker-compose.prod.yml ...
+#
+# Deploy steps (deliberately manual, not automatic on container start):
+#   1. docker compose -f docker-compose.prod.yml build
+#   2. docker compose -f docker-compose.prod.yml run --rm django python manage.py migrate
+#   3. docker compose -f docker-compose.prod.yml up -d
+
+# Explicit project name -- without it, Compose derives the project name
+# from the directory ("ledger"), which is identical to the dev stack's
+# name and would make this file's volumes silently alias the dev stack's
+# postgres/redis volumes if ever run on the same host/directory as dev.
+name: ledger-prod
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    # env_file (not `environment: ${VAR}`) -- Compose's `${VAR}` YAML
+    # substitution reads from the *invoking shell* or an auto-loaded `.env`
+    # in the working directory regardless of which `-f` file is in use, so
+    # it would silently pick up dev's .env instead of .env.prod. env_file
+    # injects real container env vars, same as every other service here.
+    env_file:
+      - .env.prod
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # No published port -- network-internal only in production, unlike
+    # dev's host-accessible 5432 (a dev-convenience for local DB clients).
+    healthcheck:
+      # $POSTGRES_USER/$POSTGRES_DB here are the container's own env vars
+      # (from env_file above), evaluated by the container's shell at
+      # healthcheck time -- not Compose-level substitution.
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  django:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    volumes:
+      - staticfiles:/app/staticfiles
+    env_file:
+      - .env.prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    command: celery -A config worker -l info
+    env_file:
+      - .env.prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    command: celery -A config beat -l info
+    env_file:
+      - .env.prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - staticfiles:/app/staticfiles:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - django
+
+volumes:
+  postgres_data:
+  redis_data:
+  staticfiles:

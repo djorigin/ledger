@@ -96,6 +96,9 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+# Only used by collectstatic (a prod deploy step) -- runserver's dev static
+# serving doesn't need it, but it's harmless to define unconditionally here.
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

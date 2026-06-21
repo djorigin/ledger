@@ -1,0 +1,54 @@
+# Production image -- separate from the dev `Dockerfile` (volume-mounted,
+# runserver) on purpose, per the brief's "don't make local dev depend on
+# [prod deploy] work." Code is baked in here, not bind-mounted.
+
+FROM python:3.12-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    POETRY_VIRTUALENVS_IN_PROJECT=true
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libpq-dev gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir poetry==2.4.1
+
+COPY pyproject.toml poetry.lock* /app/
+# --only main: prod doesn't need pytest/factory-boy (the dev dependency
+# group) baked into the image at all.
+RUN poetry install --no-root --only main --no-interaction --no-ansi
+
+
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DJANGO_SETTINGS_MODULE=config.settings.prod \
+    PATH="/app/.venv/bin:$PATH"
+
+WORKDIR /app
+
+RUN groupadd --system django && useradd --system --gid django --create-home django
+
+COPY --from=builder /app/.venv /app/.venv
+COPY . /app/
+
+# /app/staticfiles is a shared volume with the nginx container (see
+# docker-compose.prod.yml) -- pre-create it owned by the non-root user so
+# `collectstatic` can write to it once the volume is mounted over this path.
+RUN mkdir -p /app/staticfiles && chown django:django /app/staticfiles
+
+USER django
+
+EXPOSE 8000
+
+# collectstatic needs real settings (DJANGO_SECRET_KEY, DATABASE_URL) to
+# even import config.settings.prod -- those only exist as real env vars at
+# container *runtime* (via docker-compose's env_file), not at `docker
+# build` time, so this runs here rather than as a RUN step above. Idempotent
+# and fast; only the web container's CMD includes it (celery_worker/beat use
+# a different command entirely, so it only runs once per deploy in practice).
+CMD ["sh", "-c", "python manage.py collectstatic --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3"]

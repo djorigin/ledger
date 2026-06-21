@@ -99,7 +99,10 @@ interface RequestOptions {
 }
 
 async function performRequest(path: string, options: RequestOptions): Promise<Response> {
-  const url = new URL(`${API_BASE_URL}${path}`);
+  // Base arg lets API_BASE_URL be either absolute (dev's cross-origin
+  // http://localhost:8000/api/v1) or relative (prod's same-origin /api/v1,
+  // proxied by nginx) -- new URL() throws on a relative string with no base.
+  const url = new URL(`${API_BASE_URL}${path}`, window.location.origin);
   if (options.searchParams) {
     for (const [key, value] of Object.entries(options.searchParams)) {
       if (value !== undefined) url.searchParams.set(key, String(value));

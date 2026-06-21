@@ -1,11 +1,13 @@
 # Environment
 .env
+.env.prod
 
 # Python
 __pycache__/
 *.py[cod]
 *.sqlite3
 .pytest_cache/
+backend/staticfiles/
 
 # Poetry / virtualenvs
 .venv/
