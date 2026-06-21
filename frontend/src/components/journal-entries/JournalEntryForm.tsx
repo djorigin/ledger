@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Account } from "@/types/api";
+import type { Account, Project } from "@/types/api";
 
 interface LineFormState {
   account: string;
@@ -28,12 +28,14 @@ const emptyLine: LineFormState = { account: "", debit_amount: "", credit_amount:
 interface JournalEntryFormProps {
   entityId: string;
   accounts: Account[];
+  projects?: Project[];
 }
 
-export function JournalEntryForm({ entityId, accounts }: JournalEntryFormProps) {
+export function JournalEntryForm({ entityId, accounts, projects = [] }: JournalEntryFormProps) {
   const queryClient = useQueryClient();
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState("");
+  const [project, setProject] = useState("");
   const [lines, setLines] = useState<[LineFormState, LineFormState]>([emptyLine, emptyLine]);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -41,7 +43,9 @@ export function JournalEntryForm({ entityId, accounts }: JournalEntryFormProps) 
     mutationFn: createJournalEntry,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["journal-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["project-progress"] });
       setDescription("");
+      setProject("");
       setLines([emptyLine, emptyLine]);
       setFormError(null);
     },
@@ -90,6 +94,7 @@ export function JournalEntryForm({ entityId, accounts }: JournalEntryFormProps) 
       entity: entityId,
       entry_date: entryDate,
       description,
+      project: project || null,
       lines: lines.map((line) => {
         const account = accountFor(line.account);
         return {
@@ -134,6 +139,29 @@ export function JournalEntryForm({ entityId, accounts }: JournalEntryFormProps) 
           />
         </div>
       </div>
+
+      {projects.length > 0 && (
+        <div className="space-y-2 max-w-sm">
+          <Label>Project (optional)</Label>
+          <Select value={project} onValueChange={(v) => setProject(v ?? "")}>
+            <SelectTrigger>
+              <SelectValue placeholder="None">
+                {(v: string | null) => projects.find((p) => p.id === v)?.name ?? null}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="" label="None">
+                None
+              </SelectItem>
+              {projects.map((p) => (
+                <SelectItem key={p.id} value={p.id} label={p.name}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {lines.map((line, index) => (
         <div key={index} className="grid grid-cols-4 gap-2 items-end">

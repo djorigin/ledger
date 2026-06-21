@@ -70,6 +70,7 @@ export interface JournalEntry {
   description: string;
   memo: string;
   status: JournalEntryStatus;
+  project: string | null;
   created_by: string;
   created_at: string;
   posted_at: string | null;
@@ -91,6 +92,7 @@ export interface CreateJournalEntryPayload {
   entry_date: string;
   description: string;
   memo?: string;
+  project?: string | null;
   lines: JournalLineInput[];
 }
 
@@ -198,4 +200,84 @@ export interface ReconciliationRecord {
   reconciled_by: string;
   reconciled_at: string;
   notes: string;
+}
+
+export type BudgetPeriodType = "MONTHLY" | "ANNUAL" | "CUSTOM";
+export type ProjectStatus = "ACTIVE" | "COMPLETED" | "CANCELLED";
+
+export interface Budget {
+  id: string;
+  entity: string;
+  account: string;
+  name: string;
+  period_type: BudgetPeriodType;
+  period_start: string;
+  period_end: string;
+  budgeted_amount: string;
+  include_descendants: boolean;
+  notes: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BudgetProgress {
+  budgeted_amount: string;
+  actual_amount: string;
+  remaining_amount: string;
+  percent_used: string | null;
+}
+
+export interface SavingsGoal {
+  id: string;
+  entity: string;
+  name: string;
+  target_amount: string;
+  target_date: string;
+  linked_account: string;
+  notes: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SavingsGoalProgress {
+  current_balance: string;
+  target_amount: string;
+  remaining_amount: string;
+  percent_complete: string | null;
+  days_remaining: number;
+}
+
+export interface Project {
+  id: string;
+  entity: string;
+  name: string;
+  description: string;
+  budget_amount: string;
+  currency: string;
+  status: ProjectStatus;
+  start_date: string | null;
+  target_completion_date: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectProgress {
+  actual_to_date: string;
+  budget_amount: string;
+  remaining_amount: string;
+  percent_used: string | null;
+}
+
+export interface SuperannuationProjectionRequest {
+  current_balance: string;
+  target_date: string;
+  annual_contribution: string;
+  annual_growth_rate: string;
+}
+
+export interface SuperannuationProjectionResponse {
+  projected_balance: string;
 }

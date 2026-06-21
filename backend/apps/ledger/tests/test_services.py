@@ -15,6 +15,7 @@ from apps.ledger.exceptions import (
 from apps.ledger.models import Account, AccountType, JournalEntryStatus
 from apps.ledger.services import (
     JournalLineInput,
+    get_account_balance,
     mark_account_reconciled,
     post_journal_entry,
     record_simple_transaction,
@@ -387,3 +388,133 @@ def test_mark_account_reconciled_does_not_reclear_already_cleared_lines():
     from apps.ledger.models import ReconciliationRecord
 
     assert ReconciliationRecord.objects.filter(account=bank).count() == 2
+
+
+def test_get_account_balance_sums_posted_lines_signed_by_normal_balance():
+    entity = make_entity()
+    user = make_user()
+    bank, groceries = make_accounts(entity)
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 1), description="Salary",
+        debit_account=bank, credit_account=groceries, amount=Decimal("1000"),
+        currency="AUD", created_by=user,
+    )
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 5), description="Groceries",
+        debit_account=groceries, credit_account=bank, amount=Decimal("200"),
+        currency="AUD", created_by=user,
+    )
+    # bank: debit 1000, credit 200 -> ASSET normal_balance DEBIT -> 800
+    assert get_account_balance(bank) == Decimal("800")
+
+
+def test_get_account_balance_signed_correctly_for_liability_account():
+    entity = make_entity()
+    user = make_user()
+    bank, _ = make_accounts(entity)
+    mortgage = Account.objects.create(
+        entity=entity, account_type=AccountType.LIABILITY, name="Mortgage", native_currency="AUD"
+    )
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 1), description="Draw down",
+        debit_account=bank, credit_account=mortgage, amount=Decimal("5000"),
+        currency="AUD", created_by=user,
+    )
+    # mortgage: credit 5000, debit 0 -> LIABILITY normal_balance CREDIT -> 5000
+    assert get_account_balance(mortgage) == Decimal("5000")
+
+
+def test_get_account_balance_excludes_draft_and_reversed_entries():
+    entity = make_entity()
+    user = make_user()
+    bank, groceries = make_accounts(entity)
+    entry = record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 1), description="Groceries",
+        debit_account=groceries, credit_account=bank, amount=Decimal("50"),
+        currency="AUD", created_by=user,
+    )
+    assert get_account_balance(bank) == Decimal("-50")
+    reverse_journal_entry(entry=entry, reversed_by_user=user)
+    # original is REVERSED, reversal nets it back out -> balance returns to 0
+    assert get_account_balance(bank) == Decimal("0")
+
+
+def test_get_account_balance_respects_as_of_date():
+    entity = make_entity()
+    user = make_user()
+    bank, groceries = make_accounts(entity)
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 1), description="Early",
+        debit_account=groceries, credit_account=bank, amount=Decimal("50"),
+        currency="AUD", created_by=user,
+    )
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 6, 1), description="Late",
+        debit_account=groceries, credit_account=bank, amount=Decimal("30"),
+        currency="AUD", created_by=user,
+    )
+    assert get_account_balance(bank, as_of=date(2026, 1, 31)) == Decimal("-50")
+    assert get_account_balance(bank, as_of=date(2026, 12, 31)) == Decimal("-80")
+
+
+def test_get_account_balance_include_descendants_sums_children():
+    entity = make_entity()
+    user = make_user()
+    bank, _ = make_accounts(entity)
+    expenses = Account.objects.create(
+        entity=entity, account_type=AccountType.EXPENSE, name="Expenses", native_currency="AUD"
+    )
+    groceries = Account.objects.create(
+        entity=entity, account_type=AccountType.EXPENSE, name="Groceries",
+        native_currency="AUD", parent=expenses,
+    )
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 1), description="Groceries",
+        debit_account=groceries, credit_account=bank, amount=Decimal("50"),
+        currency="AUD", created_by=user,
+    )
+    assert get_account_balance(expenses, include_descendants=False) == Decimal("0")
+    assert get_account_balance(expenses, include_descendants=True) == Decimal("50")
+
+
+def test_get_account_balance_include_descendants_raises_on_currency_mismatch():
+    entity = make_entity()
+    expenses = Account.objects.create(
+        entity=entity, account_type=AccountType.EXPENSE, name="Expenses", native_currency="AUD"
+    )
+    Account.objects.create(
+        entity=entity, account_type=AccountType.EXPENSE, name="China Expenses",
+        native_currency="CNY", parent=expenses,
+    )
+    with pytest.raises(CurrencyMismatchError):
+        get_account_balance(expenses, include_descendants=True)
+
+
+def test_post_journal_entry_accepts_optional_project():
+    entity = make_entity()
+    user = make_user()
+    bank, groceries = make_accounts(entity)
+    entry = record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 1), description="Groceries",
+        debit_account=groceries, credit_account=bank, amount=Decimal("50"),
+        currency="AUD", created_by=user,
+    )
+    assert entry.project is None
+
+
+def test_post_journal_entry_tags_entry_with_project_when_given():
+    from apps.budgets.models import Project
+
+    entity = make_entity()
+    user = make_user()
+    bank, groceries = make_accounts(entity)
+    project = Project.objects.create(
+        entity=entity, name="China migration costs", budget_amount=Decimal("5000"),
+        currency="AUD", created_by=user,
+    )
+    entry = record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 1), description="Visa fees",
+        debit_account=groceries, credit_account=bank, amount=Decimal("200"),
+        currency="AUD", created_by=user, project=project,
+    )
+    assert entry.project_id == project.id

@@ -4,11 +4,15 @@ import { useAuth } from "@/auth/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { getLastSelectedEntityId } from "@/lib/entityStorage";
 import { AccountsPage } from "@/pages/AccountsPage";
+import { BudgetsPage } from "@/pages/BudgetsPage";
 import { ImportPage } from "@/pages/ImportPage";
 import { JournalEntriesPage } from "@/pages/JournalEntriesPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
+import { ProjectsPage } from "@/pages/ProjectsPage";
 import { ReconciliationPage } from "@/pages/ReconciliationPage";
+import { SavingsGoalsPage } from "@/pages/SavingsGoalsPage";
+import { SuperannuationPage } from "@/pages/SuperannuationPage";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 
 function RootRedirect() {
@@ -37,6 +41,10 @@ export default function App() {
           <Route path="accounts" element={<AccountsPage />} />
           <Route path="accounts/:accountId/import" element={<ImportPage />} />
           <Route path="accounts/:accountId/reconciliation" element={<ReconciliationPage />} />
+          <Route path="budgets" element={<BudgetsPage />} />
+          <Route path="savings-goals" element={<SavingsGoalsPage />} />
+          <Route path="projects" element={<ProjectsPage />} />
+          <Route path="superannuation" element={<SuperannuationPage />} />
         </Route>
       </Route>
       <Route path="*" element={<NotFoundPage />} />

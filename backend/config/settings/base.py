@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "apps.ledger",
     "apps.currencies",
     "apps.imports",
+    "apps.budgets",
     "apps.api",
 ]
 

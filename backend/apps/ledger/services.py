@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import Q, Sum
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from apps.ledger.exceptions import (
@@ -14,6 +16,7 @@ from apps.ledger.exceptions import (
 )
 from apps.ledger.models import (
     Account,
+    DebitCredit,
     JournalEntry,
     JournalEntryStatus,
     JournalLine,
@@ -30,7 +33,9 @@ class JournalLineInput:
     description: str = ""
 
 
-def post_journal_entry(*, entity, entry_date, description, lines, created_by, memo=""):
+def post_journal_entry(
+    *, entity, entry_date, description, lines, created_by, memo="", project=None
+):
     """
     The only sanctioned way to create a posted JournalEntry. Validates line
     count, entity/currency consistency, and debit=credit balance in Python
@@ -80,6 +85,7 @@ def post_journal_entry(*, entity, entry_date, description, lines, created_by, me
             status=JournalEntryStatus.POSTED,
             created_by=created_by,
             posted_at=timezone.now(),
+            project=project,
         )
         entry.full_clean()
         entry.save()
@@ -110,6 +116,7 @@ def record_simple_transaction(
     currency,
     created_by,
     memo="",
+    project=None,
 ):
     """Convenience wrapper for the common 2-line case (e.g. an expense paid from a bank account)."""
     return post_journal_entry(
@@ -118,6 +125,7 @@ def record_simple_transaction(
         description=description,
         memo=memo,
         created_by=created_by,
+        project=project,
         lines=[
             JournalLineInput(account=debit_account, currency=currency, debit_amount=amount),
             JournalLineInput(account=credit_account, currency=currency, credit_amount=amount),
@@ -152,6 +160,12 @@ def reverse_journal_entry(*, entry, reversed_by_user, reversal_date=None):
             description=f"Reversal of: {entry.description}",
             lines=swapped_lines,
             created_by=reversed_by_user,
+            # Propagate the project tag so a reversed entry's correction
+            # nets out within the same project's accounting too, not just
+            # the general ledger -- otherwise compute_project_actuals would
+            # see the original's REVERSED cost but never the reversal's
+            # offsetting effect (it'd belong to no project at all).
+            project=entry.project,
         )
         reversal.reverses = entry
         reversal.save(update_fields=["reverses"])
@@ -185,3 +199,48 @@ def mark_account_reconciled(*, account, statement_date, statement_balance, recon
             cleared=False,
         ).update(cleared=True)
     return record
+
+
+def get_account_balance(account, *, as_of=None, include_descendants=False) -> Decimal:
+    """
+    Sum of this account's real JournalLine activity, signed so that a
+    positive result always means "more of the account's normal_balance
+    side" -- e.g. positive for an ASSET account means more debits than
+    credits (money in), positive for a LIABILITY/EQUITY/INCOME account
+    means more credits than debits. Only DRAFT entries are excluded --
+    REVERSED entries must still count, because a reversal only nets out
+    correctly if both the original (now REVERSED) and its offsetting
+    POSTED reversal are included; excluding REVERSED would count only
+    half of a cancel-out pair and silently corrupt the balance. `cleared`
+    is not considered here -- that's a reconciliation concept (step 6),
+    not a balance concept. as_of=None means all-time; pass a date to get
+    the balance as of (inclusive of) that date.
+
+    include_descendants=False by default: callers wanting `account` plus
+    its direct children (e.g. a parent "Groceries" category) must opt in
+    explicitly. One level of children only, matching how deep the existing
+    hierarchy is actually used.
+    """
+    if include_descendants:
+        accounts = Account.objects.filter(Q(pk=account.pk) | Q(parent=account.pk))
+        mismatched = accounts.exclude(native_currency=account.native_currency)
+        if mismatched.exists():
+            raise CurrencyMismatchError(
+                f"Cannot aggregate '{account}' with descendants of a different native_currency."
+            )
+    else:
+        accounts = Account.objects.filter(pk=account.pk)
+
+    lines = JournalLine.objects.filter(account__in=accounts).exclude(
+        journal_entry__status=JournalEntryStatus.DRAFT
+    )
+    if as_of is not None:
+        lines = lines.filter(journal_entry__entry_date__lte=as_of)
+
+    totals = lines.aggregate(
+        debit=Coalesce(Sum("debit_amount"), Decimal("0")),
+        credit=Coalesce(Sum("credit_amount"), Decimal("0")),
+    )
+    if account.normal_balance == DebitCredit.DEBIT:
+        return totals["debit"] - totals["credit"]
+    return totals["credit"] - totals["debit"]

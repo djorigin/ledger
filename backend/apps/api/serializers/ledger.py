@@ -3,6 +3,7 @@ from decimal import Decimal
 from rest_framework import serializers
 
 from apps.api.fields import MoneyField
+from apps.budgets.models import Project
 from apps.entities.models import Entity
 from apps.ledger.exceptions import LedgerError
 from apps.ledger.models import Account, JournalEntry, JournalLine
@@ -41,6 +42,9 @@ class JournalLineWriteSerializer(serializers.Serializer):
 
 class JournalEntrySerializer(serializers.ModelSerializer):
     entity = serializers.PrimaryKeyRelatedField(queryset=Entity.objects.all())
+    project = serializers.PrimaryKeyRelatedField(
+        queryset=Project.objects.all(), required=False, allow_null=True
+    )
     lines = JournalLineWriteSerializer(many=True, write_only=True)
     lines_detail = JournalLineReadSerializer(source="lines", many=True, read_only=True)
     created_by = serializers.StringRelatedField(read_only=True)
@@ -50,7 +54,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = JournalEntry
         fields = [
-            "id", "entity", "entry_date", "description", "memo", "status",
+            "id", "entity", "entry_date", "description", "memo", "status", "project",
             "created_by", "created_at", "posted_at",
             "reverses", "reversed_by",
             "lines", "lines_detail",
@@ -81,6 +85,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
                 memo=validated_data.get("memo", ""),
                 lines=line_inputs,
                 created_by=request.user,
+                project=validated_data.get("project"),
             )
         except LedgerError as exc:
             raise serializers.ValidationError({"non_field_errors": [str(exc)]}) from exc

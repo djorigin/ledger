@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 
 import { listAccounts } from "@/api/accounts";
 import { listJournalEntries } from "@/api/journalEntries";
+import { listProjects } from "@/api/projects";
 import { useAuth } from "@/auth/AuthContext";
 import { JournalEntryForm } from "@/components/journal-entries/JournalEntryForm";
 import { JournalEntryList } from "@/components/journal-entries/JournalEntryList";
@@ -19,6 +20,11 @@ export function JournalEntriesPage() {
     queryKey: ["journal-entries"],
     queryFn: listJournalEntries,
   });
+  const projectsQuery = useQuery({
+    queryKey: ["projects", entityId],
+    queryFn: () => listProjects(entityId),
+    enabled: !!entityId,
+  });
 
   if (!entityId) return null;
 
@@ -31,12 +37,13 @@ export function JournalEntriesPage() {
 
   const accounts = (accountsQuery.data?.results ?? []).filter((a) => a.entity === entityId);
   const entries = (entriesQuery.data?.results ?? []).filter((e) => e.entity === entityId);
+  const projects = projectsQuery.data?.results ?? [];
 
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Journal entries</h1>
       {canEdit && accounts.length > 0 && (
-        <JournalEntryForm entityId={entityId} accounts={accounts} />
+        <JournalEntryForm entityId={entityId} accounts={accounts} projects={projects} />
       )}
       <JournalEntryList entries={entries} accounts={accounts} />
     </div>

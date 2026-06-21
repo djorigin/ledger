@@ -116,6 +116,17 @@ class JournalEntry(models.Model):
         related_name="reversed_by",
     )
 
+    # A Project is a deletable planning artifact (apps.budgets), unlike
+    # JournalEntry itself -- deleting one must never touch the immutable
+    # ledger record it's tagged to, hence SET_NULL not PROTECT/CASCADE.
+    project = models.ForeignKey(
+        "budgets.Project",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="journal_entries",
+    )
+
     objects = JournalEntryQuerySet.as_manager()
 
     class Meta:
@@ -124,6 +135,13 @@ class JournalEntry(models.Model):
 
     def __str__(self):
         return f"{self.entry_date} {self.description} ({self.entity})"
+
+    def clean(self):
+        super().clean()
+        if self.project_id and self.project.entity_id != self.entity_id:
+            raise ValidationError(
+                {"project": _("Project must belong to the same entity as this journal entry.")}
+            )
 
     def delete(self, *args, **kwargs):
         raise JournalEntryImmutableError(

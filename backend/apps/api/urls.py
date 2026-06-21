@@ -3,6 +3,12 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.api.views.auth import EmailTokenObtainPairView, MeView
+from apps.api.views.budgets import (
+    BudgetViewSet,
+    ProjectViewSet,
+    SavingsGoalViewSet,
+    SuperannuationProjectionView,
+)
 from apps.api.views.entities import EntityViewSet
 from apps.api.views.imports import (
     AccountReconciliationRecordsView,
@@ -21,6 +27,9 @@ router.register("journal-entries", JournalEntryViewSet, basename="journal-entry"
 router.register("column-mappings", ColumnMappingViewSet, basename="column-mapping")
 router.register("import-batches", ImportBatchViewSet, basename="import-batch")
 router.register("imported-transactions", ImportedTransactionViewSet, basename="imported-transaction")
+router.register("budgets", BudgetViewSet, basename="budget")
+router.register("savings-goals", SavingsGoalViewSet, basename="savings-goal")
+router.register("projects", ProjectViewSet, basename="project")
 
 urlpatterns = [
     path("auth/login/", EmailTokenObtainPairView.as_view(), name="auth-login"),
@@ -34,6 +43,11 @@ urlpatterns = [
         "accounts/<uuid:account_id>/reconciliation-records/",
         AccountReconciliationRecordsView.as_view(),
         name="account-reconciliation-records",
+    ),
+    path(
+        "superannuation/project/",
+        SuperannuationProjectionView.as_view(),
+        name="superannuation-project",
     ),
     path("", include(router.urls)),
 ]
