@@ -2,15 +2,13 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from django.db.models import Q, Sum
-from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from apps.budgets.exceptions import InvalidProjectionParametersError
 from apps.budgets.models import Budget, Project, SavingsGoal
 from apps.currencies.services import convert
-from apps.ledger.models import Account, AccountType, DebitCredit, JournalEntryStatus, JournalLine
-from apps.ledger.services import get_account_balance
+from apps.ledger.models import AccountType, JournalEntryStatus, JournalLine
+from apps.ledger.services import get_account_balance, get_account_period_activity
 
 
 @dataclass(frozen=True)
@@ -29,33 +27,15 @@ def compute_budget_actual(budget: Budget) -> Decimal:
     inclusive, signed per the account's normal_balance -- an EXPENSE
     budget's "actual" is debits minus credits, so a refund/credit-note
     correctly reduces actual spend rather than netting against unrelated
-    debits blindly. Only DRAFT entries are excluded -- a REVERSED entry
-    must still count alongside its offsetting POSTED reversal, or only
-    half of a cancel-out pair would be counted (same reasoning as
-    get_account_balance). This is a bounded-period sum, distinct from
-    get_account_balance's all-time as-of balance -- the two answer
-    different questions and are kept as separate functions deliberately.
+    debits blindly. Thin wrapper over get_account_period_activity, the
+    shared ledger-intrinsic primitive also used by the income statement.
     """
-    accounts = (
-        Account.objects.filter(Q(pk=budget.account_id) | Q(parent=budget.account_id))
-        if budget.include_descendants
-        else Account.objects.filter(pk=budget.account_id)
+    return get_account_period_activity(
+        budget.account,
+        period_start=budget.period_start,
+        period_end=budget.period_end,
+        include_descendants=budget.include_descendants,
     )
-    lines = (
-        JournalLine.objects.filter(
-            account__in=accounts,
-            journal_entry__entry_date__gte=budget.period_start,
-            journal_entry__entry_date__lte=budget.period_end,
-        )
-        .exclude(journal_entry__status=JournalEntryStatus.DRAFT)
-    )
-    totals = lines.aggregate(
-        debit=Coalesce(Sum("debit_amount"), Decimal("0")),
-        credit=Coalesce(Sum("credit_amount"), Decimal("0")),
-    )
-    if budget.account.normal_balance == DebitCredit.DEBIT:
-        return totals["debit"] - totals["credit"]
-    return totals["credit"] - totals["debit"]
 
 
 def compute_budget_progress(budget: Budget) -> BudgetProgress:

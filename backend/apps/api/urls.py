@@ -19,6 +19,13 @@ from apps.api.views.imports import (
     ImportPreviewView,
 )
 from apps.api.views.ledger import AccountViewSet, JournalEntryViewSet
+from apps.api.views.reports import (
+    AccountLedgerView,
+    BalanceSheetView,
+    BudgetVsActualView,
+    IncomeStatementView,
+    TrialBalanceView,
+)
 
 router = DefaultRouter()
 router.register("entities", EntityViewSet, basename="entity")
@@ -48,6 +55,19 @@ urlpatterns = [
         "superannuation/project/",
         SuperannuationProjectionView.as_view(),
         name="superannuation-project",
+    ),
+    path("reports/trial-balance/", TrialBalanceView.as_view(), name="report-trial-balance"),
+    path("reports/balance-sheet/", BalanceSheetView.as_view(), name="report-balance-sheet"),
+    path(
+        "reports/income-statement/",
+        IncomeStatementView.as_view(),
+        name="report-income-statement",
+    ),
+    path("reports/account-ledger/", AccountLedgerView.as_view(), name="report-account-ledger"),
+    path(
+        "reports/budget-vs-actual/",
+        BudgetVsActualView.as_view(),
+        name="report-budget-vs-actual",
     ),
     path("", include(router.urls)),
 ]

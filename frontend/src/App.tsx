@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { useAuth } from "@/auth/AuthContext";
 import { AppShell } from "@/components/layout/AppShell";
+import { ReportsLayout } from "@/components/layout/ReportsLayout";
 import { getLastSelectedEntityId } from "@/lib/entityStorage";
 import { AccountsPage } from "@/pages/AccountsPage";
 import { BudgetsPage } from "@/pages/BudgetsPage";
@@ -11,6 +12,11 @@ import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProjectsPage } from "@/pages/ProjectsPage";
 import { ReconciliationPage } from "@/pages/ReconciliationPage";
+import { AccountLedgerPage } from "@/pages/reports/AccountLedgerPage";
+import { BalanceSheetPage } from "@/pages/reports/BalanceSheetPage";
+import { BudgetVsActualPage } from "@/pages/reports/BudgetVsActualPage";
+import { IncomeStatementPage } from "@/pages/reports/IncomeStatementPage";
+import { TrialBalancePage } from "@/pages/reports/TrialBalancePage";
 import { SavingsGoalsPage } from "@/pages/SavingsGoalsPage";
 import { SuperannuationPage } from "@/pages/SuperannuationPage";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
@@ -45,6 +51,14 @@ export default function App() {
           <Route path="savings-goals" element={<SavingsGoalsPage />} />
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="superannuation" element={<SuperannuationPage />} />
+          <Route path="reports" element={<ReportsLayout />}>
+            <Route index element={<Navigate to="trial-balance" replace />} />
+            <Route path="trial-balance" element={<TrialBalancePage />} />
+            <Route path="balance-sheet" element={<BalanceSheetPage />} />
+            <Route path="income-statement" element={<IncomeStatementPage />} />
+            <Route path="account-ledger" element={<AccountLedgerPage />} />
+            <Route path="budget-vs-actual" element={<BudgetVsActualPage />} />
+          </Route>
         </Route>
       </Route>
       <Route path="*" element={<NotFoundPage />} />

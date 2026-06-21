@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "apps.currencies",
     "apps.imports",
     "apps.budgets",
+    "apps.reports",
     "apps.api",
 ]
 

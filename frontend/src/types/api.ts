@@ -281,3 +281,106 @@ export interface SuperannuationProjectionRequest {
 export interface SuperannuationProjectionResponse {
   projected_balance: string;
 }
+
+export interface TrialBalanceRow {
+  account_id: string;
+  account_name: string;
+  account_type: AccountType;
+  debit_balance: string | null;
+  credit_balance: string | null;
+}
+
+export interface CurrencyTrialBalance {
+  currency: string;
+  rows: TrialBalanceRow[];
+  total_debits: string;
+  total_credits: string;
+}
+
+export interface TrialBalanceReport {
+  as_of: string;
+  currency_groups: CurrencyTrialBalance[];
+}
+
+export interface BalanceSheetRow {
+  account_id: string;
+  account_name: string;
+  amount: string;
+}
+
+export interface BalanceSheetSection {
+  rows: BalanceSheetRow[];
+  total: string;
+}
+
+export interface BalanceSheetReport {
+  as_of: string;
+  reporting_currency: string;
+  assets: BalanceSheetSection;
+  liabilities: BalanceSheetSection;
+  equity: BalanceSheetSection;
+  retained_earnings: string;
+  total_assets: string;
+  total_liabilities_and_equity: string;
+  balances: boolean;
+}
+
+export interface IncomeStatementRow {
+  account_id: string;
+  account_name: string;
+  amount: string;
+}
+
+export interface IncomeStatementSection {
+  rows: IncomeStatementRow[];
+  total: string;
+}
+
+export interface IncomeStatementReport {
+  period_start: string;
+  period_end: string;
+  reporting_currency: string;
+  income: IncomeStatementSection;
+  expenses: IncomeStatementSection;
+  net_income: string;
+}
+
+export interface AccountLedgerLine {
+  entry_date: string;
+  description: string;
+  debit_amount: string;
+  credit_amount: string;
+  running_balance: string;
+}
+
+export interface AccountLedgerReport {
+  account_id: string;
+  account_name: string;
+  currency: string;
+  period_start: string | null;
+  period_end: string | null;
+  opening_balance: string;
+  lines: AccountLedgerLine[];
+  closing_balance: string;
+}
+
+export interface BudgetVsActualRow {
+  budget_id: string;
+  account_name: string;
+  currency: string;
+  period_start: string;
+  period_end: string;
+  budgeted_amount: string;
+  actual_amount: string;
+  percent_used: string | null;
+  budgeted_amount_converted: string;
+  actual_amount_converted: string;
+}
+
+export interface BudgetVsActualReport {
+  reporting_currency: string;
+  rows: BudgetVsActualRow[];
+  total_budgeted_converted: string;
+  total_actual_converted: string;
+  overall_percent_used: string | null;
+}

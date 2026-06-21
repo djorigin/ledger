@@ -201,6 +201,32 @@ def mark_account_reconciled(*, account, statement_date, statement_balance, recon
     return record
 
 
+def _accounts_for_aggregation(account, include_descendants):
+    """
+    Shared by get_account_balance/get_account_period_activity:
+    include_descendants=False by default -- callers wanting `account` plus
+    its direct children (e.g. a parent "Groceries" category) must opt in
+    explicitly. One level of children only, matching how deep the existing
+    hierarchy is actually used. Descendants must share native_currency --
+    aggregating across currencies would silently produce a meaningless number.
+    """
+    if not include_descendants:
+        return Account.objects.filter(pk=account.pk)
+    accounts = Account.objects.filter(Q(pk=account.pk) | Q(parent=account.pk))
+    mismatched = accounts.exclude(native_currency=account.native_currency)
+    if mismatched.exists():
+        raise CurrencyMismatchError(
+            f"Cannot aggregate '{account}' with descendants of a different native_currency."
+        )
+    return accounts
+
+
+def _signed_total(account, totals) -> Decimal:
+    if account.normal_balance == DebitCredit.DEBIT:
+        return totals["debit"] - totals["credit"]
+    return totals["credit"] - totals["debit"]
+
+
 def get_account_balance(account, *, as_of=None, include_descendants=False) -> Decimal:
     """
     Sum of this account's real JournalLine activity, signed so that a
@@ -215,21 +241,8 @@ def get_account_balance(account, *, as_of=None, include_descendants=False) -> De
     is not considered here -- that's a reconciliation concept (step 6),
     not a balance concept. as_of=None means all-time; pass a date to get
     the balance as of (inclusive of) that date.
-
-    include_descendants=False by default: callers wanting `account` plus
-    its direct children (e.g. a parent "Groceries" category) must opt in
-    explicitly. One level of children only, matching how deep the existing
-    hierarchy is actually used.
     """
-    if include_descendants:
-        accounts = Account.objects.filter(Q(pk=account.pk) | Q(parent=account.pk))
-        mismatched = accounts.exclude(native_currency=account.native_currency)
-        if mismatched.exists():
-            raise CurrencyMismatchError(
-                f"Cannot aggregate '{account}' with descendants of a different native_currency."
-            )
-    else:
-        accounts = Account.objects.filter(pk=account.pk)
+    accounts = _accounts_for_aggregation(account, include_descendants)
 
     lines = JournalLine.objects.filter(account__in=accounts).exclude(
         journal_entry__status=JournalEntryStatus.DRAFT
@@ -241,6 +254,30 @@ def get_account_balance(account, *, as_of=None, include_descendants=False) -> De
         debit=Coalesce(Sum("debit_amount"), Decimal("0")),
         credit=Coalesce(Sum("credit_amount"), Decimal("0")),
     )
-    if account.normal_balance == DebitCredit.DEBIT:
-        return totals["debit"] - totals["credit"]
-    return totals["credit"] - totals["debit"]
+    return _signed_total(account, totals)
+
+
+def get_account_period_activity(
+    account, *, period_start, period_end, include_descendants=False
+) -> Decimal:
+    """
+    Same semantics as get_account_balance (signed per normal_balance, DRAFT
+    excluded, REVERSED included for the same reversal-netting reason) but
+    bounded to a [period_start, period_end] window instead of an as-of
+    cutoff -- e.g. "how much activity happened in June," not "what's the
+    balance right now." Used by budget-actual and income-statement
+    computations, which both need exactly this primitive.
+    """
+    accounts = _accounts_for_aggregation(account, include_descendants)
+
+    lines = JournalLine.objects.filter(
+        account__in=accounts,
+        journal_entry__entry_date__gte=period_start,
+        journal_entry__entry_date__lte=period_end,
+    ).exclude(journal_entry__status=JournalEntryStatus.DRAFT)
+
+    totals = lines.aggregate(
+        debit=Coalesce(Sum("debit_amount"), Decimal("0")),
+        credit=Coalesce(Sum("credit_amount"), Decimal("0")),
+    )
+    return _signed_total(account, totals)

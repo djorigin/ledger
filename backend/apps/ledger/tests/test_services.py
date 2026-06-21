@@ -16,6 +16,7 @@ from apps.ledger.models import Account, AccountType, JournalEntryStatus
 from apps.ledger.services import (
     JournalLineInput,
     get_account_balance,
+    get_account_period_activity,
     mark_account_reconciled,
     post_journal_entry,
     record_simple_transaction,
@@ -518,3 +519,64 @@ def test_post_journal_entry_tags_entry_with_project_when_given():
         currency="AUD", created_by=user, project=project,
     )
     assert entry.project_id == project.id
+
+
+def test_get_account_period_activity_bounds_to_date_range():
+    entity = make_entity()
+    user = make_user()
+    bank, groceries = make_accounts(entity)
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 1), description="January",
+        debit_account=groceries, credit_account=bank, amount=Decimal("50"),
+        currency="AUD", created_by=user,
+    )
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 2, 1), description="February",
+        debit_account=groceries, credit_account=bank, amount=Decimal("30"),
+        currency="AUD", created_by=user,
+    )
+    assert get_account_period_activity(
+        groceries, period_start=date(2026, 1, 1), period_end=date(2026, 1, 31)
+    ) == Decimal("50")
+    assert get_account_period_activity(
+        groceries, period_start=date(2026, 1, 1), period_end=date(2026, 2, 28)
+    ) == Decimal("80")
+
+
+def test_get_account_period_activity_excludes_draft_includes_reversed_pair():
+    entity = make_entity()
+    user = make_user()
+    bank, groceries = make_accounts(entity)
+    entry = record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 10), description="Groceries",
+        debit_account=groceries, credit_account=bank, amount=Decimal("50"),
+        currency="AUD", created_by=user,
+    )
+    reverse_journal_entry(
+        entry=entry, reversed_by_user=user, reversal_date=date(2026, 1, 20)
+    )
+    # original (now REVERSED) debit 50 + reversal's offsetting credit 50 -> nets to 0
+    assert get_account_period_activity(
+        groceries, period_start=date(2026, 1, 1), period_end=date(2026, 1, 31)
+    ) == Decimal("0")
+
+
+def test_get_account_period_activity_include_descendants_sums_children():
+    entity = make_entity()
+    user = make_user()
+    bank, _ = make_accounts(entity)
+    expenses = Account.objects.create(
+        entity=entity, account_type=AccountType.EXPENSE, name="Expenses", native_currency="AUD"
+    )
+    groceries = Account.objects.create(
+        entity=entity, account_type=AccountType.EXPENSE, name="Groceries",
+        native_currency="AUD", parent=expenses,
+    )
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 1), description="Groceries",
+        debit_account=groceries, credit_account=bank, amount=Decimal("50"),
+        currency="AUD", created_by=user,
+    )
+    period = {"period_start": date(2026, 1, 1), "period_end": date(2026, 1, 31)}
+    assert get_account_period_activity(expenses, include_descendants=False, **period) == Decimal("0")
+    assert get_account_period_activity(expenses, include_descendants=True, **period) == Decimal("50")
