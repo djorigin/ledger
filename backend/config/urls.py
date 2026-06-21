@@ -17,7 +17,13 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+from apps.api.graphql.schema import schema
+from apps.api.graphql.views import LedgerGraphQLView
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/', include('apps.api.urls')),
+    # Not nested under /api/v1/ -- a GraphQL endpoint isn't versioned the
+    # way REST paths are; the schema itself is the compatibility surface.
+    path('graphql/', LedgerGraphQLView.as_view(schema=schema), name='graphql'),
 ]
