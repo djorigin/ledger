@@ -61,6 +61,12 @@ export function AppShell() {
             <Link to={`/entities/${entityId}/invoices`} className="hover:text-foreground">
               Invoices
             </Link>
+            <Link to={`/entities/${entityId}/recurring`} className="hover:text-foreground">
+              Recurring
+            </Link>
+            <Link to={`/entities/${entityId}/pending-review`} className="hover:text-foreground">
+              Pending Review
+            </Link>
             <Link to={`/entities/${entityId}/reports`} className="hover:text-foreground">
               Reports
             </Link>

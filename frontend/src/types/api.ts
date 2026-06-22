@@ -488,3 +488,38 @@ export interface InvoiceProgress {
   status: BillOrInvoiceStatus;
   is_overdue: boolean;
 }
+
+export type RecurrenceFrequency = "WEEKLY" | "MONTHLY" | "QUARTERLY" | "ANNUALLY";
+export type PendingEntryStatus = "PENDING" | "APPROVED" | "DISMISSED";
+
+export interface RecurringTransactionTemplate {
+  id: string;
+  entity: string;
+  description: string;
+  debit_account: string;
+  credit_account: string;
+  amount: string;
+  currency: string;
+  frequency: RecurrenceFrequency;
+  start_date: string;
+  end_date: string | null;
+  next_due_date: string;
+  is_active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PendingRecurringEntry {
+  id: string;
+  template: string;
+  template_description: string;
+  template_currency: string;
+  due_date: string;
+  amount: string;
+  status: PendingEntryStatus;
+  journal_entry: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}

@@ -12,7 +12,9 @@ import { InvoicesPage } from "@/pages/InvoicesPage";
 import { JournalEntriesPage } from "@/pages/JournalEntriesPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
+import { PendingReviewPage } from "@/pages/PendingReviewPage";
 import { ProjectsPage } from "@/pages/ProjectsPage";
+import { RecurringTemplatesPage } from "@/pages/RecurringTemplatesPage";
 import { ReconciliationPage } from "@/pages/ReconciliationPage";
 import { AccountLedgerPage } from "@/pages/reports/AccountLedgerPage";
 import { BalanceSheetPage } from "@/pages/reports/BalanceSheetPage";
@@ -57,6 +59,8 @@ export default function App() {
           <Route path="superannuation" element={<SuperannuationPage />} />
           <Route path="bills" element={<BillsPage />} />
           <Route path="invoices" element={<InvoicesPage />} />
+          <Route path="recurring" element={<RecurringTemplatesPage />} />
+          <Route path="pending-review" element={<PendingReviewPage />} />
           <Route path="reports" element={<ReportsLayout />}>
             <Route index element={<Navigate to="trial-balance" replace />} />
             <Route path="trial-balance" element={<TrialBalancePage />} />

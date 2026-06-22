@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "apps.budgets",
     "apps.reports",
     "apps.ap_ar",
+    "apps.recurring",
     "apps.api",
 ]
 
@@ -124,6 +125,12 @@ CELERY_BEAT_SCHEDULE = {
         # ECB publishes reference rates ~16:00 CET (~14:00-15:00 UTC
         # depending on DST). 16:30 UTC gives a safe buffer past either case.
         "schedule": crontab(hour=16, minute=30),
+    },
+    "generate-due-recurring-entries-daily": {
+        "task": "apps.recurring.tasks.generate_due_recurring_entries",
+        # Arbitrary daily time -- no external publish schedule to coordinate
+        # with, unlike the FX rate task above.
+        "schedule": crontab(hour=6, minute=0),
     },
 }
 

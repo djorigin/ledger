@@ -20,6 +20,7 @@ from apps.api.views.imports import (
     ImportPreviewView,
 )
 from apps.api.views.ledger import AccountViewSet, JournalEntryViewSet
+from apps.api.views.recurring import PendingRecurringEntryViewSet, RecurringTransactionTemplateViewSet
 from apps.api.views.reports import (
     AccountLedgerView,
     BalanceSheetView,
@@ -42,6 +43,8 @@ router.register("savings-goals", SavingsGoalViewSet, basename="savings-goal")
 router.register("projects", ProjectViewSet, basename="project")
 router.register("bills", BillViewSet, basename="bill")
 router.register("invoices", InvoiceViewSet, basename="invoice")
+router.register("recurring-templates", RecurringTransactionTemplateViewSet, basename="recurring-template")
+router.register("recurring-pending", PendingRecurringEntryViewSet, basename="recurring-pending")
 
 urlpatterns = [
     path("auth/login/", EmailTokenObtainPairView.as_view(), name="auth-login"),
