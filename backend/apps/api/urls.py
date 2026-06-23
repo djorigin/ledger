@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.api.views.ap_ar import BillViewSet, InvoiceViewSet
+from apps.api.views.assets import AssetClassViewSet
 from apps.api.views.auth import EmailTokenObtainPairView, MeView
 from apps.api.views.budgets import (
     BudgetViewSet,
@@ -19,13 +20,16 @@ from apps.api.views.imports import (
     ImportedTransactionViewSet,
     ImportPreviewView,
 )
+from apps.api.views.inventory import InventoryItemViewSet
 from apps.api.views.ledger import AccountViewSet, JournalEntryViewSet
+from apps.api.views.payroll import PayslipViewSet
 from apps.api.views.recurring import PendingRecurringEntryViewSet, RecurringTransactionTemplateViewSet
 from apps.api.views.reports import (
     AccountLedgerView,
     BalanceSheetView,
     BudgetVsActualView,
     CashFlowView,
+    ConsolidatedNetWorthView,
     IncomeStatementView,
     NetWorthView,
     TrialBalanceView,
@@ -45,6 +49,9 @@ router.register("bills", BillViewSet, basename="bill")
 router.register("invoices", InvoiceViewSet, basename="invoice")
 router.register("recurring-templates", RecurringTransactionTemplateViewSet, basename="recurring-template")
 router.register("recurring-pending", PendingRecurringEntryViewSet, basename="recurring-pending")
+router.register("asset-classes", AssetClassViewSet, basename="asset-class")
+router.register("inventory", InventoryItemViewSet, basename="inventory-item")
+router.register("payslips", PayslipViewSet, basename="payslip")
 
 urlpatterns = [
     path("auth/login/", EmailTokenObtainPairView.as_view(), name="auth-login"),
@@ -79,5 +86,10 @@ urlpatterns = [
     ),
     path("reports/cash-flow/", CashFlowView.as_view(), name="report-cash-flow"),
     path("reports/net-worth/", NetWorthView.as_view(), name="report-net-worth"),
+    path(
+        "reports/consolidated-net-worth/",
+        ConsolidatedNetWorthView.as_view(),
+        name="report-consolidated-net-worth",
+    ),
     path("", include(router.urls)),
 ]

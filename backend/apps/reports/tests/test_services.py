@@ -13,6 +13,7 @@ from apps.reports.services import (
     compute_balance_sheet,
     compute_budget_vs_actual,
     compute_cash_flow_statement,
+    compute_consolidated_net_worth,
     compute_income_statement,
     compute_net_worth,
     compute_trial_balance,
@@ -452,3 +453,45 @@ def test_net_worth_excludes_entities_not_passed_in():
     report = compute_net_worth([entity_a], as_of=date(2026, 1, 31), reporting_currency="AUD")
     assert len(report.rows) == 1
     assert report.rows[0].entity == entity_a
+
+
+def test_compute_consolidated_net_worth_combines_gl_and_asset_register():
+    from apps.assets.models import AssetCategory, AssetClass, AssetValuation
+
+    entity = make_entity()
+    user = make_user()
+    bank, groceries, salary = make_accounts(entity)
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 1), description="Salary",
+        debit_account=bank, credit_account=salary, amount=Decimal("1000"),
+        currency="AUD", created_by=user,
+    )
+    asset = AssetClass.objects.create(
+        entity=entity, name="House", category=AssetCategory.PROPERTY, currency="AUD", created_by=user,
+    )
+    AssetValuation.objects.create(
+        asset=asset, valuation_date=date(2026, 1, 1), current_value=Decimal("400000"),
+        currency="AUD", created_by=user,
+    )
+
+    report = compute_consolidated_net_worth([entity], as_of=date(2026, 1, 31), reporting_currency="AUD")
+    row = report.rows[0]
+    assert row.gl_net_worth == Decimal("1000")
+    assert row.asset_register_value == Decimal("400000")
+    assert row.consolidated_net_worth == Decimal("401000")
+    assert report.grand_total == Decimal("401000")
+
+
+def test_compute_consolidated_net_worth_with_no_assets_matches_gl_only():
+    entity = make_entity()
+    user = make_user()
+    bank, groceries, salary = make_accounts(entity)
+    record_simple_transaction(
+        entity=entity, entry_date=date(2026, 1, 1), description="Salary",
+        debit_account=bank, credit_account=salary, amount=Decimal("1000"),
+        currency="AUD", created_by=user,
+    )
+
+    report = compute_consolidated_net_worth([entity], as_of=date(2026, 1, 31), reporting_currency="AUD")
+    assert report.rows[0].asset_register_value == Decimal("0")
+    assert report.grand_total == Decimal("1000")

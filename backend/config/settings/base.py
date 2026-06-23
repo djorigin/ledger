@@ -43,6 +43,10 @@ INSTALLED_APPS = [
     "apps.reports",
     "apps.ap_ar",
     "apps.recurring",
+    "apps.assets",
+    "apps.inventory",
+    "apps.payroll",
+    "apps.api_tokens",
     "apps.api",
 ]
 
@@ -55,6 +59,11 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Must run before any view code -- many viewsets override
+    # get_permissions() entirely, bypassing DEFAULT_PERMISSION_CLASSES, so
+    # this is the layer that actually guarantees API tokens are read-only
+    # universally. See apps/api_tokens/middleware.py.
+    "apps.api_tokens.middleware.DenyApiTokenWriteMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -102,6 +111,13 @@ STATIC_URL = "static/"
 # serving doesn't need it, but it's harmless to define unconditionally here.
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+# User-uploaded files (Inventory photos). Dev: served by Django itself via
+# config/urls.py's static() helper. Prod: served by nginx from a shared
+# volume, same pattern as STATIC_ROOT/staticfiles -- see nginx/nginx.conf
+# and docker-compose.prod.yml.
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REDIS_URL = env("REDIS_URL", default="redis://redis:6379/0")
@@ -137,11 +153,20 @@ CELERY_BEAT_SCHEDULE = {
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
+        # "Authorization: Token <token>" -- a separate scheme from JWT's
+        # "Bearer", so the two authenticators never interact (see
+        # apps/api_tokens/authentication.py). For long-lived, read-only
+        # polling (Google Sheets) that can't do JWT's rotating-refresh dance.
+        "apps.api_tokens.authentication.APITokenAuthentication",
     ],
     # Default-deny: every endpoint requires authentication, with per-viewset
     # HasEntityRole layered on top for entity-scoped role checks.
+    # DenyWriteForApiToken applies globally too -- an APIToken-authenticated
+    # request may only read, regardless of the underlying user's actual
+    # role, with zero per-view changes.
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
+        "apps.api_tokens.permissions.DenyWriteForApiToken",
     ],
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",

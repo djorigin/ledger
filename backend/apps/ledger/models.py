@@ -42,7 +42,15 @@ class Account(models.Model):
     parent = models.ForeignKey(
         "self", on_delete=models.PROTECT, null=True, blank=True, related_name="children"
     )
-    account_type = models.CharField(max_length=16, choices=AccountType.choices)
+    account_type = models.CharField(
+        max_length=16,
+        choices=AccountType.choices,
+        help_text=(
+            "ASSET: bank accounts, cash, property, investments, superannuation. "
+            "LIABILITY: credit cards, loans, mortgages. EQUITY: owner's capital/drawings. "
+            "INCOME: salary, wages, business revenue. EXPENSE: everyday spending."
+        ),
+    )
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=32, blank=True)
     native_currency = models.CharField(max_length=3, validators=[validate_currency_code])

@@ -17,6 +17,10 @@ class AccountAdmin(admin.ModelAdmin):
         "name", "account_type", "entity", "parent", "native_currency",
         "is_active", "is_cash_equivalent",
     ]
+    # entity then account_type -- groups e.g. all of a household's
+    # LIABILITY accounts (credit cards, loans, mortgages) together,
+    # matching the model's own Meta.ordering.
+    ordering = ["entity", "account_type", "name"]
     list_filter = ["account_type", "entity", "native_currency", "is_active", "is_cash_equivalent"]
     search_fields = ["name", "code"]
     autocomplete_fields = ["entity", "parent"]

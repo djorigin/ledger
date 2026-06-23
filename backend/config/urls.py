@@ -14,6 +14,8 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
@@ -27,3 +29,9 @@ urlpatterns = [
     # way REST paths are; the schema itself is the compatibility surface.
     path('graphql/', LedgerGraphQLView.as_view(schema=schema), name='graphql'),
 ]
+
+# Dev-only: serves MEDIA_ROOT directly (Inventory photo uploads). In prod
+# this is a no-op (DEBUG=False) -- nginx serves /media/ from a shared
+# volume instead, see nginx/nginx.conf.
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -15,6 +15,7 @@ from apps.api.serializers.reports import (
     CashFlowReportSerializer,
     IncomeStatementQuerySerializer,
     IncomeStatementReportSerializer,
+    ConsolidatedNetWorthReportSerializer,
     NetWorthQuerySerializer,
     NetWorthReportSerializer,
     TrialBalanceQuerySerializer,
@@ -27,6 +28,7 @@ from apps.reports.services import (
     compute_balance_sheet,
     compute_budget_vs_actual,
     compute_cash_flow_statement,
+    compute_consolidated_net_worth,
     compute_income_statement,
     compute_net_worth,
     compute_trial_balance,
@@ -296,3 +298,43 @@ class NetWorthView(APIView):
             "consolidated_net_worth": report.consolidated_net_worth,
         }
         return Response(NetWorthReportSerializer(data).data)
+
+
+class ConsolidatedNetWorthView(APIView):
+    """
+    GL net worth + Fixed Asset Register valuations, per entity and
+    summed -- a new endpoint, not a change to NetWorthView above (which
+    stays GL-only). Same access pattern: spans every entity the user has
+    access to, no single object to check HasEntityRole against.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = NetWorthQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+
+        entities = Entity.objects.accessible_by(request.user)
+        report = compute_consolidated_net_worth(
+            entities,
+            as_of=query.validated_data.get("as_of"),
+            reporting_currency=query.validated_data["reporting_currency"],
+        )
+        data = {
+            "as_of": report.as_of,
+            "reporting_currency": report.reporting_currency,
+            "rows": [
+                {
+                    "entity_id": row.entity.id,
+                    "entity_name": row.entity.name,
+                    "gl_net_worth": row.gl_net_worth,
+                    "asset_register_value": row.asset_register_value,
+                    "consolidated_net_worth": row.consolidated_net_worth,
+                }
+                for row in report.rows
+            ],
+            "total_gl_net_worth": report.total_gl_net_worth,
+            "total_asset_register_value": report.total_asset_register_value,
+            "grand_total": report.grand_total,
+        }
+        return Response(ConsolidatedNetWorthReportSerializer(data).data)

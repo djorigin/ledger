@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.utils import timezone
 
+from apps.assets.services import compute_asset_register_net_worth
 from apps.budgets.models import Budget
 from apps.budgets.services import compute_budget_progress
 from apps.currencies.services import convert
@@ -567,4 +568,65 @@ def compute_net_worth(entities, *, as_of=None, reporting_currency) -> NetWorthRe
         reporting_currency=reporting_currency,
         rows=rows,
         consolidated_net_worth=consolidated_net_worth,
+    )
+
+
+@dataclass(frozen=True)
+class ConsolidatedEntityNetWorthRow:
+    entity: object
+    gl_net_worth: Decimal
+    asset_register_value: Decimal
+    consolidated_net_worth: Decimal
+
+
+@dataclass(frozen=True)
+class ConsolidatedNetWorthReport:
+    as_of: date
+    reporting_currency: str
+    rows: list[ConsolidatedEntityNetWorthRow]
+    total_gl_net_worth: Decimal
+    total_asset_register_value: Decimal
+    grand_total: Decimal
+
+
+def compute_consolidated_net_worth(entities, *, as_of=None, reporting_currency) -> ConsolidatedNetWorthReport:
+    """
+    GL net worth (assets minus liabilities, from posted journal entries)
+    plus the Fixed Asset Register's latest valuations (house market
+    value, super balance, etc.) -- a new, separate report from
+    compute_net_worth, which stays GL-only and unchanged. This is the
+    "consolidated" view Addition 4 asks for, built by composing the two
+    existing functions rather than recomputing either from scratch.
+    `entities` must already be access-filtered by the caller, same
+    convention as compute_net_worth/compute_asset_register_net_worth.
+    """
+    entities = list(entities)
+    as_of = as_of or timezone.now().date()
+    gl_report = compute_net_worth(entities, as_of=as_of, reporting_currency=reporting_currency)
+    asset_report = compute_asset_register_net_worth(entities, reporting_currency=reporting_currency)
+
+    asset_value_by_entity: dict = {}
+    for row in asset_report.rows:
+        asset_value_by_entity[row.asset.entity_id] = (
+            asset_value_by_entity.get(row.asset.entity_id, Decimal("0")) + row.value
+        )
+
+    rows = [
+        ConsolidatedEntityNetWorthRow(
+            entity=gl_row.entity,
+            gl_net_worth=gl_row.net_worth,
+            asset_register_value=asset_value_by_entity.get(gl_row.entity.id, Decimal("0")),
+            consolidated_net_worth=gl_row.net_worth
+            + asset_value_by_entity.get(gl_row.entity.id, Decimal("0")),
+        )
+        for gl_row in gl_report.rows
+    ]
+
+    return ConsolidatedNetWorthReport(
+        as_of=as_of,
+        reporting_currency=reporting_currency,
+        rows=rows,
+        total_gl_net_worth=gl_report.consolidated_net_worth,
+        total_asset_register_value=asset_report.total,
+        grand_total=gl_report.consolidated_net_worth + asset_report.total,
     )

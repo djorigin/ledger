@@ -36,10 +36,11 @@ RUN groupadd --system django && useradd --system --gid django --create-home djan
 COPY --from=builder /app/.venv /app/.venv
 COPY . /app/
 
-# /app/staticfiles is a shared volume with the nginx container (see
-# docker-compose.prod.yml) -- pre-create it owned by the non-root user so
-# `collectstatic` can write to it once the volume is mounted over this path.
-RUN mkdir -p /app/staticfiles && chown django:django /app/staticfiles
+# /app/staticfiles and /app/media are shared volumes with the nginx
+# container (see docker-compose.prod.yml) -- pre-create them owned by the
+# non-root user so collectstatic/file uploads can write once the volumes
+# are mounted over these paths.
+RUN mkdir -p /app/staticfiles /app/media && chown django:django /app/staticfiles /app/media
 
 USER django
 

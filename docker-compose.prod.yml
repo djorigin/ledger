@@ -54,6 +54,7 @@ services:
     restart: unless-stopped
     volumes:
       - staticfiles:/app/staticfiles
+      - media:/app/media
     env_file:
       - .env.prod
     depends_on:
@@ -97,6 +98,7 @@ services:
     restart: unless-stopped
     volumes:
       - staticfiles:/app/staticfiles:ro
+      - media:/app/media:ro
     ports:
       - "80:80"
     depends_on:
@@ -106,3 +108,4 @@ volumes:
   postgres_data:
   redis_data:
   staticfiles:
+  media:

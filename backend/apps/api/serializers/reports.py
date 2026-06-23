@@ -181,3 +181,20 @@ class NetWorthReportSerializer(serializers.Serializer):
     reporting_currency = serializers.CharField()
     rows = EntityNetWorthRowSerializer(many=True)
     consolidated_net_worth = MoneyField()
+
+
+class ConsolidatedEntityNetWorthRowSerializer(serializers.Serializer):
+    entity_id = serializers.UUIDField()
+    entity_name = serializers.CharField()
+    gl_net_worth = MoneyField()
+    asset_register_value = MoneyField()
+    consolidated_net_worth = MoneyField()
+
+
+class ConsolidatedNetWorthReportSerializer(serializers.Serializer):
+    as_of = serializers.DateField()
+    reporting_currency = serializers.CharField()
+    rows = ConsolidatedEntityNetWorthRowSerializer(many=True)
+    total_gl_net_worth = MoneyField()
+    total_asset_register_value = MoneyField()
+    grand_total = MoneyField()

@@ -8,6 +8,7 @@ __pycache__/
 *.sqlite3
 .pytest_cache/
 backend/staticfiles/
+backend/media/
 
 # Poetry / virtualenvs
 .venv/
